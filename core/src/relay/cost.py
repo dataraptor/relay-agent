@@ -47,6 +47,23 @@ class Usage(BaseModel):
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
 
+    def __add__(self, other: Usage) -> Usage:
+        """Bucket-wise sum so a run can accumulate triage + each loop step + faithfulness."""
+        if not isinstance(other, Usage):
+            return NotImplemented
+        return Usage(
+            input_tokens=self.input_tokens + other.input_tokens,
+            output_tokens=self.output_tokens + other.output_tokens,
+            cache_read_tokens=self.cache_read_tokens + other.cache_read_tokens,
+            cache_creation_tokens=self.cache_creation_tokens + other.cache_creation_tokens,
+        )
+
+    def __radd__(self, other: object) -> Usage:
+        """Let ``sum(usages)`` work (it starts from the int ``0``)."""
+        if other == 0:
+            return self
+        return self.__add__(other)  # type: ignore[arg-type]
+
 
 def price(provider: str, model_id: str) -> tuple[float, float]:
     """Return ``(input_per_mtok, output_per_mtok)`` for a known ``(provider, model_id)``.

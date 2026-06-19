@@ -82,6 +82,15 @@ def get_ticket(conn: sqlite3.Connection, ticket_id: str) -> dict[str, Any] | Non
     return _row_to_dict(cur.fetchone())
 
 
+def get_tickets_for_customer(conn: sqlite3.Connection, customer_id: str) -> list[dict[str, Any]]:
+    """All tickets belonging to a customer, newest-updated first (for ``lookup_customer``)."""
+    cur = conn.execute(
+        "SELECT * FROM tickets WHERE customer_id = ? ORDER BY updated_at DESC, id",
+        (customer_id,),
+    )
+    return [dict(row) for row in cur.fetchall()]
+
+
 # --- Ticket mutations (plain writes; gating is Split 03) ---------------------
 
 
