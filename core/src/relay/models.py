@@ -358,13 +358,39 @@ class Outcome(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _collapse_nullable(node: dict[str, Any]) -> None:
+    """Rewrite a Pydantic ``anyOf`` null-union into the canonical ``type: [..., "null"]`` form.
+
+    Pydantic emits a nullable field as ``{"anyOf": [{"type": "string"}, {"type": "null"}]}``.
+    OpenAI strict mode accepts both, but the spec (§05 R2) mandates the explicit type-union form
+    (``"type": ["string", "null"]``) so the schema reads the same on both providers. Only a pure
+    union of bare ``{"type": <scalar>}`` members is collapsed; an ``anyOf`` carrying any other
+    constraint (``$ref``, nested objects, formats) is left untouched.
+    """
+    members = node.get("anyOf")
+    if not isinstance(members, list) or not members:
+        return
+    types: list[str] = []
+    for sub in members:
+        if not isinstance(sub, dict):
+            return
+        if set(sub.keys()) - {"title", "description"} != {"type"} or not isinstance(
+            sub["type"], str
+        ):
+            return
+        types.append(sub["type"])
+    node.pop("anyOf")
+    node["type"] = types if len(types) > 1 else types[0]
+
+
 def strict_json_schema(model: type[BaseModel]) -> dict[str, Any]:
     """Return ``model``'s JSON schema in provider strict-mode shape.
 
     Recursively, for every object node: every property is forced into ``required`` and
     ``additionalProperties`` is set to ``false``; ``default`` keys are stripped (OpenAI
-    strict mode rejects them). Nullable fields stay as null-unions — i.e. *required keys that
-    may be null*, never omitted. Compiles unchanged on both Anthropic and OpenAI strict mode.
+    strict mode rejects them); nullable ``anyOf`` unions are collapsed to the explicit
+    ``type: [..., "null"]`` form (§05 R2) so nullable fields are *required keys that may be
+    null*, never omitted. Compiles unchanged on both Anthropic and OpenAI strict mode.
     """
 
     schema = model.model_json_schema()
@@ -372,6 +398,7 @@ def strict_json_schema(model: type[BaseModel]) -> dict[str, Any]:
     def _walk(node: Any) -> None:
         if isinstance(node, dict):
             node.pop("default", None)
+            _collapse_nullable(node)
             if node.get("type") == "object" and "properties" in node:
                 node["additionalProperties"] = False
                 node["required"] = list(node["properties"].keys())

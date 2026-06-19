@@ -70,13 +70,26 @@ def test_unknown_model_raises_keyerror_not_zero() -> None:
         compute_cost("anthropic", "claude-does-not-exist", Usage(input_tokens=1))
 
 
-def test_openai_raises_build_time_error() -> None:
-    # Must NOT return 0 or a fabricated number — Split 05 pins OpenAI pricing.
-    with pytest.raises(NotImplementedError) as exc:
-        price("openai", "gpt-whatever")
-    assert "Split 05" in str(exc.value)
-    with pytest.raises(NotImplementedError):
-        compute_cost("openai", "gpt-whatever", Usage(input_tokens=1))
+def test_openai_pricing_is_pinned_gpt_5_5() -> None:
+    # Split 05: OpenAI gpt-5.5 pricing verified 2026-06-20 — input $5.00 / output $30.00 per MTok.
+    assert price("openai", "gpt-5.5") == (5.0, 30.0)
+    assert PRICING[("openai", "gpt-5.5")] == (5.0, 30.0)
+
+
+def test_openai_cost_matches_hand_calc() -> None:
+    # T3: OpenAI usage prices the full prompt as input; cache buckets are 0 (Open decision A),
+    # so the cache multipliers never apply — usd = (in*5 + out*30) / 1e6.
+    usage = Usage(input_tokens=10_000, output_tokens=2_000)
+    expected = (10_000 * 5.0 + 2_000 * 30.0) / 1_000_000
+    assert math.isclose(compute_cost("openai", "gpt-5.5", usage), expected, rel_tol=1e-12)
+
+
+def test_unknown_openai_model_raises_keyerror_not_fabricated() -> None:
+    # An unknown OpenAI model must raise (never a silent 0 / fabricated number).
+    with pytest.raises(KeyError):
+        price("openai", "gpt-does-not-exist")
+    with pytest.raises(KeyError):
+        compute_cost("openai", "gpt-does-not-exist", Usage(input_tokens=1))
 
 
 def test_usage_forbids_extra_fields() -> None:

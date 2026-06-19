@@ -57,8 +57,10 @@ MAX_TOOL_CALLS = 6
 
 
 def make_provider(provider: str, model: str | None) -> ProviderClient:
-    """Construct a real provider by name. OpenAI arrives in Split 05.
+    """Construct a real provider by name (``anthropic`` or ``openai``).
 
+    The whole portability point (§9): selecting a provider changes only this constructor —
+    nothing downstream (gate, loop, backend, faithfulness, Outcome) knows which one it got.
     The ``StubProvider`` is never built here — tests inject it directly via the private
     ``_provider`` argument of :func:`handle` / :func:`approve`.
     """
@@ -67,7 +69,9 @@ def make_provider(provider: str, model: str | None) -> ProviderClient:
 
         return AnthropicProvider(model=model) if model else AnthropicProvider()
     if provider == "openai":
-        raise NotImplementedError("the OpenAI provider is built in Split 05")
+        from .provider.openai import OpenAIProvider
+
+        return OpenAIProvider(model=model) if model else OpenAIProvider()
     raise ValueError(f"unknown provider {provider!r}")
 
 

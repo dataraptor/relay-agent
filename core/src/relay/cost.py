@@ -2,8 +2,16 @@
 
 ``$/ticket`` = SUM(``llm_calls.cost_usd``) over a run (triage + each loop step + faithfulness).
 This module owns the pricing table and the 3-bucket cache-aware formula. Anthropic pricing is
-pinned (verified 2026-06-19). **OpenAI pricing is deliberately a build-time TODO (Split 05):**
-asking for an OpenAI cost *raises* so nobody ships a fabricated number.
+pinned (verified 2026-06-19); OpenAI pricing is pinned (verified 2026-06-20, Split 05 — see
+``PRICING`` for the source). Any ``(provider, model)`` with no pinned entry *raises* (never a
+silent 0) so nobody ships a fabricated number.
+
+**OpenAI cache asymmetry (Open decision A, §05).** OpenAI's ``prompt_tokens`` already *includes*
+any cached prompt tokens (they are a subset, not a separate bucket) and OpenAI has no
+cache-*write* surcharge — so the Anthropic cache multipliers below (``1.25×`` write / ``0.10×``
+read) must **never** be applied to OpenAI usage. The OpenAI provider therefore reports
+``cache_read_tokens == cache_creation_tokens == 0`` and prices the full prompt as ``input_tokens``;
+prompt caching is simply *not credited* on the OpenAI path in v1 (honest, not faked).
 """
 
 from __future__ import annotations
@@ -12,12 +20,15 @@ from pydantic import BaseModel, ConfigDict
 
 #: Pricing per million tokens (MTok): (input_per_mtok, output_per_mtok), in USD.
 #: Anthropic — pinned from the spec's API-conformance section (verified 2026-06-19).
+#: OpenAI — pinned for the gpt-5.5 deployment used by this project (verified 2026-06-20 against
+#: aipricing.guru/openai-pricing and cross-checked via openrouter.ai/openai/gpt-5.5 +
+#: morphllm.com/openai-api-pricing): input $5.00 / cached-input $0.50 / output $30.00 per MTok.
+#: We do not credit the cached-input rate (Open decision A) — see the module docstring.
 PRICING: dict[tuple[str, str], tuple[float, float]] = {
     ("anthropic", "claude-opus-4-8"): (5.0, 25.0),
     ("anthropic", "claude-sonnet-4-6"): (3.0, 15.0),
     ("anthropic", "claude-haiku-4-5"): (1.0, 5.0),
-    # TODO(Split 05): verify OpenAI per-model pricing against the OpenAI pricing page at
-    # build time and pin it here. Until then, ``price("openai", ...)`` raises (see below).
+    ("openai", "gpt-5.5"): (5.0, 30.0),
 }
 
 #: Prompt-cache minimum prefix sizes in tokens (§13). A system+tools prefix below the floor
@@ -68,14 +79,9 @@ class Usage(BaseModel):
 def price(provider: str, model_id: str) -> tuple[float, float]:
     """Return ``(input_per_mtok, output_per_mtok)`` for a known ``(provider, model_id)``.
 
-    OpenAI raises a clear build-time error (pricing pinned in Split 05). Any other unknown
-    pair raises ``KeyError`` — never a silent 0.
+    An unknown pair (either provider) raises ``KeyError`` — never a silent 0 and never a
+    fabricated number.
     """
-    if provider == "openai":
-        raise NotImplementedError(
-            "OpenAI pricing is not pinned yet — verify per-model pricing at build time "
-            "(Split 05) before computing OpenAI cost. Refusing to fabricate a number."
-        )
     try:
         return PRICING[(provider, model_id)]
     except KeyError as exc:

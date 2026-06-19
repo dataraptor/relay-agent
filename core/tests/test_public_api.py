@@ -47,8 +47,13 @@ def test_make_provider_anthropic_with_explicit_model(monkeypatch: pytest.MonkeyP
         relay.make_provider("anthropic", "claude-opus-4-8")
 
 
-def test_make_provider_openai_is_deferred_to_split_05() -> None:
-    with pytest.raises(NotImplementedError):
+def test_make_provider_openai_constructs_or_needs_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Split 05: openai is now a real provider. Without any key it raises MissingAPIKeyError
+    # (parity with anthropic) — never NotImplementedError.
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("AZURE_OPENAI_ENDPOINT", raising=False)
+    monkeypatch.delenv("AZURE_OPENAI_API_KEY", raising=False)
+    with pytest.raises(MissingAPIKeyError):
         relay.make_provider("openai", None)
 
 
