@@ -35,6 +35,10 @@ class StubProvider:
         returns a default end-of-turn ``ModelStep`` (no tool calls) so loops terminate.
     usage:
         The ``Usage`` reported for ``structured_output`` (and for the default end-turn step).
+    provider:
+        The provider name reported (default ``"stub"``). Set to a real provider such as
+        ``"anthropic"`` (with a priced ``model``) when a test needs the loop's cost ledger to
+        accumulate non-zero ``cost_usd`` from canned usage (Split 03 T8).
     """
 
     def __init__(
@@ -45,8 +49,9 @@ class StubProvider:
         steps: list[ModelStep] | None = None,
         model: str = "stub-model",
         usage: Usage | None = None,
+        provider: str = "stub",
     ) -> None:
-        self.provider = "stub"
+        self.provider = provider
         self.model = model
         self._triage_result = triage_result
         self._structured = list(structured_results or [])
