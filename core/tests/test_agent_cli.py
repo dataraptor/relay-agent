@@ -310,11 +310,15 @@ def test_cli_bad_decisions_json_errors_cleanly(tmp_path, capsys) -> None:
     assert "Traceback" not in err
 
 
-def test_cli_eval_is_stubbed_until_split_06(capsys) -> None:
+def test_cli_eval_points_to_the_eval_layer(capsys) -> None:
+    """Split 06 refines the stub: `relay eval` is a pointer (no core->eval import), exits non-zero.
+
+    The real harness is `python -m eval.run` (the eval/ layer); core must not import it (§1).
+    """
     rc = cli.main(["eval", "--quick"])
     err = capsys.readouterr().err
     assert rc == 2
-    assert "Split 06" in err
+    assert "python -m eval.run" in err
 
 
 def test_cli_example_without_ticket_field_errors_cleanly(tmp_path, capsys) -> None:

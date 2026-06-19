@@ -163,10 +163,15 @@ def _peek_pending(outcome_id: str, store_dir: str | None) -> list[str] | None:
 
 
 def _cmd_eval(args: argparse.Namespace) -> int:
-    """Honest stub: the full eval harness (gold tickets + leaderboard) ships in Split 06."""
+    """Pointer, not an import: the eval harness lives in the top-level ``eval/`` layer.
+
+    ``core`` depends on nothing (``00-conventions.md`` §1), so it must not import ``eval/``.
+    The real entrypoint is ``python -m eval.run`` — print it (a plain string) and exit non-zero
+    so scripts that expected a result here fail loudly rather than silently no-op.
+    """
     print(
-        "error: `relay eval` is implemented in Split 06 (eval harness + gold tickets + "
-        "leaderboard). Not available yet.",
+        "Eval lives in the eval/ layer: run `python -m eval.run` "
+        "(--tier1 for the no-key safety gate, --quick for a fast smoke).",
         file=sys.stderr,
     )
     return 2
@@ -217,8 +222,8 @@ def _build_parser() -> argparse.ArgumentParser:
     s.add_argument("--reset", action="store_true", help="(no-op flag; seeding always resets)")
     s.set_defaults(func=_cmd_seed)
 
-    e = sub.add_parser("eval", help="run the eval harness (implemented in Split 06)")
-    e.add_argument("--quick", action="store_true", help="quick smoke subset (Split 06)")
+    e = sub.add_parser("eval", help="pointer to the eval/ layer (`python -m eval.run`)")
+    e.add_argument("--quick", action="store_true", help="(use `python -m eval.run --quick`)")
     e.set_defaults(func=_cmd_eval)
     return parser
 

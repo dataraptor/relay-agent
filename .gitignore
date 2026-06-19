@@ -217,3 +217,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Relay eval — persisted run artifacts (the leaderboard is regenerated; raw jsonl is not committed)
+eval/runs/
+# Relay engine run-store (per-run SQLite DBs the agent loop persists)
+*.db
