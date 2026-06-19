@@ -14,7 +14,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from ..models import Triage
+from ..models import Faithfulness, Triage
 from ..prompts import TRIAGE_SYSTEM, triage_user_content
 from .base import ModelStep, Usage
 
@@ -28,8 +28,10 @@ class StubProvider:
         Returned by ``triage`` / ``structured_output(..., Triage)`` when no explicit
         ``structured_results`` are queued. A convenience for the common single-triage case.
     structured_results:
-        A queue of objects returned (in order) by ``structured_output`` — use for faithfulness
-        (Split 04) or multi-call scripts. Takes precedence over ``triage_result``.
+        A queue of objects returned by ``structured_output`` — use for faithfulness (Split 04)
+        or multi-call scripts. Dispatch is **schema-matched**: a call pops the first queued item
+        of the requested type, so a triage call and a faithfulness call in the same run don't
+        collide (the triage call won't consume a queued ``Faithfulness``, and vice versa).
     steps:
         A queue of ``ModelStep`` s returned (in order) by ``step``. When exhausted, ``step``
         returns a default end-of-turn ``ModelStep`` (no tool calls) so loops terminate.
@@ -65,15 +67,20 @@ class StubProvider:
         self, system: str, user: str, schema_model: type[BaseModel]
     ) -> tuple[BaseModel, Usage]:
         self.calls.append(("structured_output", system, user, schema_model))
-        if self._structured:
-            result = self._structured.pop(0)
-        elif self._triage_result is not None and schema_model is Triage:
-            result = self._triage_result
-        else:
-            raise LookupError(
-                f"StubProvider has no scripted structured result for {schema_model.__name__}"
-            )
-        return result, self._usage
+        # 1. A queued result of the requested type wins (scripted multi-call: triage + faithful).
+        for i, item in enumerate(self._structured):
+            if isinstance(item, schema_model):
+                return self._structured.pop(i), self._usage
+        # 2. The triage_result convenience for the common single-triage case.
+        if schema_model is Triage and self._triage_result is not None:
+            return self._triage_result, self._usage
+        # 3. A graceful all-grounded default so loop scripts with draft_reply needn't script the
+        #    faithfulness verdict when they don't care about it (mirrors step()'s default end-turn).
+        if issubclass(schema_model, Faithfulness):
+            return Faithfulness(all_grounded=True, claims=[]), self._usage
+        raise LookupError(
+            f"StubProvider has no scripted structured result for {schema_model.__name__}"
+        )
 
     def triage(self, ticket: str) -> Triage:
         result, _ = self.structured_output(TRIAGE_SYSTEM, triage_user_content(ticket), Triage)

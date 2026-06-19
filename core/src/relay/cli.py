@@ -1,11 +1,15 @@
-"""Relay CLI (spec §16) — the core commands the Split 03 milestone needs.
+"""Relay CLI (spec §16) — the feature-complete command surface (Split 04).
 
-``handle`` runs the gated loop on a ticket; a paused ``ask`` action prints as **pending** with
-its args + rationale and the run id. ``approve`` (a *second* process invocation) reopens that
-run by id and fires/rejects the decision(s). ``seed --reset`` rebuilds a seed DB for inspection.
+``handle`` runs the gated loop on a ticket and prints triage, the trace, the drafted reply with
+its **faithfulness line** (``✓ Grounded (n/n)``), any paused ``ask`` action (args + rationale +
+run id), and the ``$/ticket``/latency caption — or the whole ``Outcome`` as JSON with ``--json``.
+``approve`` (a *second* process invocation) reopens that run by id and fires/rejects the
+decision(s) (single ``--approval`` shorthand or a ``--decisions`` batch). ``seed --reset``
+rebuilds a seed DB for inspection. ``eval`` is a stub until Split 06.
 
-Full UX polish (``--json`` everywhere, ``eval``, pretty tables) is Split 04; this keeps the
-command surface honest and lets the money demo run end to end.
+The whole Anthropic engine is now operable from the terminal with no Python REPL. Errors are
+surfaced honestly (missing key → exit 3; usage/backend/refusal/bad-JSON → exit 2), never a raw
+traceback (§20).
 """
 
 from __future__ import annotations
@@ -19,8 +23,23 @@ from typing import Any
 from . import __version__
 from .agent import approve, handle
 from .backend import db
-from .models import Outcome
+from .models import Faithfulness, Outcome
 from .provider.base import MissingAPIKeyError, ProviderError
+
+
+def _faithfulness_line(verdict: Faithfulness | None) -> str:
+    """One-line grounding caption for the drafted reply (E1: ``✓ Grounded (n/n)``)."""
+    if verdict is None:
+        return "(not checked)"
+    total = len(verdict.claims)
+    supported = sum(1 for c in verdict.claims if c.label == "SUPPORTED")
+    mark = "✓ Grounded" if verdict.all_grounded else "⚠ NOT grounded"
+    line = f"{mark} ({supported}/{total})"
+    if not verdict.all_grounded:
+        flagged = [f"{c.label}: {c.claim!r}" for c in verdict.claims if c.label != "SUPPORTED"]
+        if flagged:
+            line += "  — " + "; ".join(flagged)
+    return line
 
 
 def _read_ticket(args: argparse.Namespace) -> str:
@@ -45,6 +64,7 @@ def _format_outcome(outcome: Outcome) -> str:
     if outcome.draft_reply is not None:
         cites = ", ".join(c.chunk_id for c in outcome.draft_reply.citations) or "(none)"
         lines.append(f"draft_reply    : {outcome.draft_reply.body!r} [cites: {cites}]")
+        lines.append(f"faithfulness   : {_faithfulness_line(outcome.draft_reply.faithfulness)}")
     if outcome.actions_taken:
         lines.append("actions taken  :")
         for a in outcome.actions_taken:
@@ -142,6 +162,16 @@ def _peek_pending(outcome_id: str, store_dir: str | None) -> list[str] | None:
         conn.close()
 
 
+def _cmd_eval(args: argparse.Namespace) -> int:
+    """Honest stub: the full eval harness (gold tickets + leaderboard) ships in Split 06."""
+    print(
+        "error: `relay eval` is implemented in Split 06 (eval harness + gold tickets + "
+        "leaderboard). Not available yet.",
+        file=sys.stderr,
+    )
+    return 2
+
+
 def _cmd_seed(args: argparse.Namespace) -> int:
     conn = db.reset_to_seed()
     try:
@@ -186,12 +216,33 @@ def _build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("seed", help="rebuild a seed DB (for inspection)")
     s.add_argument("--reset", action="store_true", help="(no-op flag; seeding always resets)")
     s.set_defaults(func=_cmd_seed)
+
+    e = sub.add_parser("eval", help="run the eval harness (implemented in Split 06)")
+    e.add_argument("--quick", action="store_true", help="quick smoke subset (Split 06)")
+    e.set_defaults(func=_cmd_eval)
     return parser
+
+
+def _make_output_safe() -> None:
+    """Never crash on a console codepage that can't encode ``✓``/``⚠`` (§20).
+
+    Reconfigure stdout/stderr to replace un-encodable glyphs instead of raising
+    ``UnicodeEncodeError`` (e.g. a Windows cp1252 console). Guarded: capture streams in tests
+    and already-UTF-8 streams are left untouched.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            try:
+                reconfigure(errors="replace")
+            except (ValueError, OSError):  # pragma: no cover - defensive
+                pass
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _make_output_safe()
     try:
         return int(args.func(args))
     except MissingAPIKeyError as exc:

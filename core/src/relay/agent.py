@@ -25,6 +25,7 @@ import uuid
 from collections import Counter
 from typing import Any
 
+from . import faithfulness
 from .backend import db
 from .cost import Usage, compute_cost
 from .gate import STATE_CHANGE_TOOLS, Gate, GateAction, build_policy
@@ -34,6 +35,7 @@ from .models import (
     Citation,
     Decision,
     DraftReply,
+    Faithfulness,
     Outcome,
     ToolClass,
     Triage,
@@ -211,6 +213,12 @@ def _drive(
             decision = gate.classify(tc.name)
             if decision.action == GateAction.EXECUTE:
                 result, is_error = _run_tool(conn, run_id, ticket_id, used, tc.name, tc.args)
+                if tc.name == "draft_reply" and not is_error:
+                    # Faithfulness-check the draft in the orchestrator (not the tool) and surface
+                    # the verdict back into the tool_result before it is fed to the model (R2).
+                    draft_state = _check_draft_faithfulness(
+                        conn, run_id, ticket_id, provider, tc.args, result
+                    )
                 turn_results.append(_tool_result_block(tc.id, result, is_error))
                 if decision.cls == ToolClass.state_change:
                     # auto state-change: record the audit decision (even an errored attempt).
@@ -225,11 +233,6 @@ def _drive(
                         approver=None,
                         result_json=json.dumps(result),
                     )
-                if tc.name == "draft_reply" and not is_error:
-                    draft_state = {
-                        "body": tc.args.get("body", ""),
-                        "citations": list(tc.args.get("citations", [])),
-                    }
             elif decision.action == GateAction.PAUSE:
                 # The gate stops the write here — it is NOT executed (the trust story, §8).
                 pending.append(
@@ -288,6 +291,47 @@ def _resolve_citations(conn: Any, chunk_ids: list[str]) -> list[Citation]:
     return citations
 
 
+def _resolve_cited_chunks(conn: Any, chunk_ids: list[str]) -> list[dict[str, Any]]:
+    """Resolve cited ``chunk_id`` s to ``{chunk_id, source, text}`` (the SOURCE the judge reads).
+
+    Distinct from :func:`_resolve_citations` (which returns ``Citation`` objects for the Outcome,
+    without the chunk *text*). Unknown ids are skipped.
+    """
+    chunks: list[dict[str, Any]] = []
+    for chunk_id in chunk_ids:
+        row = conn.execute(
+            "SELECT id, source, text FROM kb_chunks WHERE id = ?", (chunk_id,)
+        ).fetchone()
+        if row is not None:
+            chunks.append({"chunk_id": row["id"], "source": row["source"], "text": row["text"]})
+    return chunks
+
+
+def _check_draft_faithfulness(
+    conn: Any,
+    run_id: str,
+    ticket_id: str | None,
+    provider: ProviderClient,
+    args: dict[str, Any],
+    result: dict[str, Any],
+) -> dict[str, Any]:
+    """Run the §10 faithfulness check on a freshly-drafted reply (Split 04 R2).
+
+    Resolves the cited chunks, runs :func:`faithfulness.check`, writes a priced
+    ``llm_calls(kind="faithfulness")`` row (so it counts toward ``$/ticket``, §13), surfaces the
+    verdict back to the model via the tool result (it ``may revise`` via a new ``draft_reply``,
+    §20 — never blocked, never a gate input), and returns the ``draft_state`` for the Outcome.
+    """
+    body = args.get("body", "")
+    citation_ids = list(args.get("citations", []))
+    cited = _resolve_cited_chunks(conn, citation_ids)
+    verdict, usage = faithfulness.check(body, cited, provider)
+    _record_llm_call(conn, run_id, ticket_id, "faithfulness", provider, usage)
+    verdict_json = verdict.model_dump(mode="json")
+    result["faithfulness"] = verdict_json  # the model sees the verdict in the next turn
+    return {"body": body, "citations": citation_ids, "faithfulness": verdict_json}
+
+
 def _assemble_outcome(
     conn: Any,
     run_id: str,
@@ -332,10 +376,11 @@ def _assemble_outcome(
 
     draft_reply = None
     if draft_state is not None:
+        faith = draft_state.get("faithfulness")
         draft_reply = DraftReply(
             body=draft_state.get("body", ""),
             citations=_resolve_citations(conn, draft_state.get("citations", [])),
-            faithfulness=None,  # filled in Split 04
+            faithfulness=Faithfulness.model_validate(faith) if faith is not None else None,
         )
 
     return Outcome(

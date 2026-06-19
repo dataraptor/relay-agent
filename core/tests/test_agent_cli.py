@@ -42,12 +42,22 @@ def _step(text, *calls):
     )
 
 
-def _install_stub(monkeypatch, steps):
+def _install_stub(monkeypatch, steps, structured_results=None):
     from relay.models import Triage
 
-    stub = StubProvider(triage_result=Triage.model_validate(_triage_dict()), steps=steps)
+    stub = StubProvider(
+        triage_result=Triage.model_validate(_triage_dict()),
+        steps=steps,
+        structured_results=structured_results,
+    )
     monkeypatch.setattr("relay.agent.make_provider", lambda provider, model: stub)
     return stub
+
+
+def _draft(call_id, body, citations):
+    return NormalizedToolCall(
+        id=call_id, name="draft_reply", args={"body": body, "citations": citations}
+    )
 
 
 def test_cli_handle_pauses_then_approve_fires(monkeypatch, tmp_path, capsys) -> None:
@@ -220,3 +230,103 @@ def test_cli_json_output(monkeypatch, tmp_path, capsys) -> None:
     assert rc == 0
     payload = json.loads(capsys.readouterr().out)
     assert payload["status"] == "done" and payload["id"] == payload["run_id"]
+
+
+def test_cli_handle_shows_grounded_faithfulness_line(monkeypatch, tmp_path, capsys) -> None:
+    """E1 (no key): the drafted reply prints a grounded faithfulness caption."""
+    from relay.models import ClaimVerdict, Faithfulness
+
+    steps = [
+        _step("drafting", _draft("d", "We refund in 5-7 days.", ["kb-refund-001"])),
+        _step("done"),
+    ]
+    verdict = Faithfulness(
+        all_grounded=True, claims=[ClaimVerdict(claim="refund 5-7d", label="SUPPORTED")]
+    )
+    _install_stub(monkeypatch, steps, structured_results=[verdict])
+    rc = cli.main(["handle", "--ticket", "charged twice", "--store-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "faithfulness   : ✓ Grounded (1/1)" in out
+
+
+def test_cli_handle_shows_ungrounded_faithfulness_line(monkeypatch, tmp_path, capsys) -> None:
+    from relay.models import ClaimVerdict, Faithfulness
+
+    steps = [_step("drafting", _draft("d", "invented policy", ["kb-refund-001"])), _step("done")]
+    verdict = Faithfulness(
+        all_grounded=True,  # model flag is overridden by check()
+        claims=[ClaimVerdict(claim="60-day window", label="CONTRADICTED")],
+    )
+    _install_stub(monkeypatch, steps, structured_results=[verdict])
+    rc = cli.main(["handle", "--ticket", "x", "--store-dir", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "⚠ NOT grounded (0/1)" in out
+    assert "CONTRADICTED" in out  # the flagged claim is named in the caption
+
+
+def test_cli_handle_json_includes_faithfulness(monkeypatch, tmp_path, capsys) -> None:
+    """--json carries the faithfulness verdict (stable field names for the API split)."""
+    from relay.models import ClaimVerdict, Faithfulness
+
+    steps = [_step("drafting", _draft("d", "b", ["kb-refund-001"])), _step("done")]
+    verdict = Faithfulness(all_grounded=True, claims=[ClaimVerdict(claim="c", label="SUPPORTED")])
+    _install_stub(monkeypatch, steps, structured_results=[verdict])
+    rc = cli.main(["handle", "--ticket", "x", "--json", "--store-dir", str(tmp_path)])
+    payload = json.loads(capsys.readouterr().out)
+    assert rc == 0
+    assert payload["draft_reply"]["faithfulness"]["all_grounded"] is True
+    assert payload["draft_reply"]["faithfulness"]["claims"][0]["label"] == "SUPPORTED"
+
+
+def test_cli_bad_example_path_errors_cleanly(tmp_path, capsys) -> None:
+    """T6/E5: a missing --example file surfaces a clean message + nonzero exit, no traceback."""
+    rc = cli.main(
+        ["handle", "--example", str(tmp_path / "nope.json"), "--store-dir", str(tmp_path)]
+    )
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert err.startswith("error:")
+    assert "Traceback" not in err
+
+
+def test_cli_bad_decisions_json_errors_cleanly(tmp_path, capsys) -> None:
+    """T6/E5: malformed --decisions JSON surfaces cleanly (no traceback)."""
+    rc = cli.main(
+        [
+            "approve",
+            "--outcome",
+            "whatever",
+            "--decisions",
+            "{not json",
+            "--store-dir",
+            str(tmp_path),
+        ]
+    )
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert err.startswith("error:")
+    assert "Traceback" not in err
+
+
+def test_cli_eval_is_stubbed_until_split_06(capsys) -> None:
+    rc = cli.main(["eval", "--quick"])
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "Split 06" in err
+
+
+def test_cli_example_without_ticket_field_errors_cleanly(tmp_path, capsys) -> None:
+    """E5: an example JSON missing the 'ticket' field surfaces cleanly, no traceback."""
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"not_ticket": "x"}), encoding="utf-8")
+    rc = cli.main(["handle", "--example", str(bad), "--store-dir", str(tmp_path)])
+    err = capsys.readouterr().err
+    assert rc == 2
+    assert "top-level 'ticket'" in err and "Traceback" not in err
+
+
+def test_faithfulness_line_when_not_checked() -> None:
+    # The defensive None branch (a draft with no verdict never happens in normal flow).
+    assert cli._faithfulness_line(None) == "(not checked)"

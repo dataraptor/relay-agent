@@ -56,6 +56,27 @@ def test_stub_structured_without_script_raises() -> None:
         StubProvider().structured_output("sys", "user", Triage)
 
 
+def test_stub_faithfulness_defaults_to_grounded_when_unscripted() -> None:
+    # A loop script with draft_reply triggers a faithfulness call it needn't script (Split 04).
+    from relay.models import Faithfulness
+
+    result, usage = StubProvider().structured_output("sys", "user", Faithfulness)
+    assert isinstance(result, Faithfulness)
+    assert result.all_grounded is True and result.claims == []
+
+
+def test_stub_dispatch_is_schema_matched() -> None:
+    # triage + faithfulness in one run: each call gets the queued item of its own type.
+    from relay.models import Faithfulness
+
+    faith = Faithfulness(all_grounded=False, claims=[])
+    stub = StubProvider(triage_result=_triage(), structured_results=[faith])
+    t, _ = stub.structured_output("sys", "ticket", Triage)  # uses triage_result, not the queue
+    f, _ = stub.structured_output("sys", "draft", Faithfulness)  # pops the queued Faithfulness
+    assert isinstance(t, Triage)
+    assert f is faith
+
+
 def test_stub_steps_are_played_in_order_then_default_end() -> None:
     # "turn 1 proposes lookup_customer, turn 2 proposes update_ticket, turn 3 ends" (R4).
     steps = [
