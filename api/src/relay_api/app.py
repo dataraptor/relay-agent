@@ -21,7 +21,8 @@ from fastapi.staticfiles import StaticFiles
 import relay
 from relay.provider.base import MissingAPIKeyError, ProviderClient, ProviderError
 
-from .meta import build_config, build_health, env_var_for, load_examples
+from .demo_stub import build_demo_stub
+from .meta import build_config, build_health, env_var_for, load_examples, stub_mode
 from .runs import RunNotFoundError, RunStore, project_run_view
 from .schemas import (
     ApproveRequest,
@@ -192,6 +193,11 @@ def _register_routes(app: FastAPI) -> None:
     ) -> RunView:
         store: RunStore = app.state.store
         run_id = store.new_run_id()
+        # Offline/CI demo: when no test override is injected and stub mode is on, drive the run
+        # with a deterministic canned provider (R1/R4) instead of a live model. Labelled on
+        # /health + /config; never silently triggered by a missing key (that stays a 424 banner).
+        if injected is None and stub_mode():
+            injected = build_demo_stub(req.ticket, req.provider, req.model)
         try:
             outcome = relay.handle(
                 req.ticket,

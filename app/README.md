@@ -57,10 +57,23 @@ uvicorn relay_api.app:app --reload      # then open http://127.0.0.1:8000/  (→
 ```bash
 cd app && npm test           # Tier-1: mapper + client + component render (node:test, no network/key)
 npm run coverage             # same, with coverage (map.js + api.js ≥ 85%)
+npm run e2e                  # cross-stack e2e (Split 10): boots a real server, real HTTP, asserts
+                             #   the never-acts-without-approval invariant through core→api→app.
+                             #   Default = deterministic stub path (no key). RELAY_E2E_LIVE=1 also
+                             #   runs it against a live provider (Tier-2).
 python tests/e2e_live.py        # Tier-2: real money-demo end-to-end over HTTP (needs a key in .env)
 python tests/e2e_injection.py   # Tier-2: the injection dark-beat (gate holds regardless of prompt)
 python tests/_gen_fixtures.py   # regenerate the canned RunView fixtures after a contract change
 ```
+
+### The cross-stack e2e (`tests/crossstack.e2e.js`) — Split 10's crown jewel
+
+It spawns a real `uvicorn relay_api.app:app`, drives `/config` → `/examples` → `/handle` →
+`/approve` over real `fetch`, opens the run's SQLite DB on disk (`node:sqlite`) to assert **0
+state-change writes before Approve** (`assert_no_unapproved_writes`), and feeds every real `RunView`
+through the same `map.js` the browser runs — proving the UI never shows a committed write before
+Approve, and shows it committed only after. Billing + injection, deterministic in CI and live on a
+real provider when keyed. It needs Python with the stack installed (`make install`).
 
 ## What's new (Split 09): every edge state, multi-pending, a11y
 

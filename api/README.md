@@ -36,9 +36,22 @@ retriable? } }` — never a 500 stack trace: missing key → `424 missing_key`, 
 
 ## Run it
 
+**One command (Split 10).** From the repo root, `python demo.py` brings the whole stack up on one
+origin with a fresh seed and prints the URL (`make demo` on Unix):
+
 ```bash
-# from the repo root, with the engine installed (pip install -e core/[providers]) ...
-pip install -e api/                      # install the API + FastAPI/uvicorn
+pip install -e "core/[providers]" && pip install -e api/   # once
+python demo.py                 # live on whatever key is in .env (http://127.0.0.1:8000/)
+python demo.py --stub          # offline demo: canned data, no key, no network
+```
+
+`demo.py` wipes the per-run store on each launch (clean cold start, no leftover state), points the
+mount at this repo's `app/` + `core/examples/`, and degrades gracefully with no key (the missing-key
+banner, or `--stub` for the deterministic offline path — labelled `stub: true` on `/health`).
+
+Or run `uvicorn` directly:
+
+```bash
 cp api/.env.example .env                 # add ANTHROPIC_API_KEY and/or OpenAI/Azure creds
 uvicorn relay_api.app:app --reload       # http://127.0.0.1:8000  (docs at /docs)
 ```

@@ -60,6 +60,17 @@ def load_examples() -> list[ExampleTicket]:
     return out
 
 
+def stub_mode() -> bool:
+    """Whether the server serves the offline/CI StubProvider path (Split 10 R1/R4).
+
+    On when ``RELAY_STUB`` is truthy. This is an explicit opt-in: a missing key on its own does
+    **not** silently fake a run — it returns the honest ``424 missing_key`` banner (R1's "clear
+    'set a key' state"). The stub path is for offline reviewer demos and the deterministic
+    cross-stack e2e, and is labelled ``stub: true`` on ``/health`` + ``/config``.
+    """
+    return os.environ.get("RELAY_STUB", "").strip().lower() in ("1", "true", "yes", "on")
+
+
 def build_config() -> ConfigResponse:
     """The selectable surface, with model IDs sourced from ``core`` (R3, E5)."""
     anthropic_default = _anthropic.DEFAULT_MODEL
@@ -74,6 +85,7 @@ def build_config() -> ConfigResponse:
         policies=["auto", "default", "strict"],
         default_provider="anthropic",
         default_model_by_provider={"anthropic": anthropic_default, "openai": openai_default},
+        stub=stub_mode(),
     )
 
 
@@ -102,5 +114,6 @@ def build_health() -> HealthResponse:
         providers_available={
             "anthropic": provider_available("anthropic"),
             "openai": provider_available("openai"),
-        }
+        },
+        stub=stub_mode(),
     )

@@ -244,6 +244,9 @@ class ConfigResponse(BaseModel):
     policies: list[str]
     default_provider: str
     default_model_by_provider: dict[str, str]
+    #: True when the server runs the offline/CI StubProvider path (no live model). Honest label
+    #: so the UI and a reviewer can tell a canned demo run from a billed live run (Split 10).
+    stub: bool = False
 
 
 class HealthResponse(BaseModel):
@@ -251,6 +254,8 @@ class HealthResponse(BaseModel):
 
     status: Literal["ok"] = "ok"
     providers_available: dict[str, bool]
+    #: See ``ConfigResponse.stub`` — surfaced on health too so a probe sees the run mode.
+    stub: bool = False
 
 
 # ---------------------------------------------------------------------------

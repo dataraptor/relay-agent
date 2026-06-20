@@ -5,6 +5,7 @@
   "description": "Relay frontend: the DC design prototype wired to the live Relay API (Split 08).",
   "scripts": {
     "test": "node --test \"tests/**/*.test.js\"",
-    "coverage": "node --test --experimental-test-coverage \"tests/**/*.test.js\""
+    "coverage": "node --test --experimental-test-coverage \"tests/**/*.test.js\"",
+    "e2e": "node --test \"tests/crossstack.e2e.js\""
   }
 }
