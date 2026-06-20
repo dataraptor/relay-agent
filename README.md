@@ -87,25 +87,74 @@ Captured **2026-06-20** from `python -m eval.run --provider both --repeats 3`. T
 
 ---
 
-## Architecture: a 4-layer stack
+## Architecture
 
+🟦 deterministic (code, gated, must be 100%) · 🟨 LLM (distributional, never gated) · 🟥 safety short-circuit: the write that does not fire.
+
+The whole design is the boundary between blue and yellow — **the model proposes, the code decides.**
+Every tool the model reaches for is classified by the **gate** (pure code, keyed by the tool's name)
+*before* it can run. Reads execute freely; a state-change either auto-runs, **pauses for human
+approval**, or is blocked. Nothing the model emits can downgrade a write out of `ask`.
+
+```mermaid
+flowchart TD
+    T([Support ticket]) --> TR["TRIAGE<br/>structured output, LLM"]
+    TR --> STEP["Agent loop · manual tool-use<br/>≤6 calls, LLM"]
+    STEP -->|proposes a tool call| GATE{"GATE.classify(name)<br/>code, never reads model intent"}
+    GATE -->|read / read_class| EXEC["execute freely<br/>lookup · search_kb · draft_reply"]
+    GATE -->|state_change · auto| AUTO["execute + audit"]
+    GATE -->|state_change · ask| PAUSE["PAUSE · suspend loop<br/>write NEVER fires"]
+    GATE -->|deny / unknown| BLOCK["blocked by policy"]
+    EXEC --> STEP
+    AUTO --> STEP
+    BLOCK --> STEP
+    PAUSE --> HUMAN([human approval])
+    HUMAN -->|allow| AUTO
+    HUMAN -->|reject| STEP
+    STEP -->|no tool call / step cap| OUT([cited reply + audited Outcome<br/>assembled from the ledger])
+    style TR fill:#fef9c3,stroke:#a16207
+    style STEP fill:#fef9c3,stroke:#a16207
+    style GATE fill:#dbeafe,stroke:#1e40af
+    style EXEC fill:#dbeafe,stroke:#1e40af
+    style AUTO fill:#dbeafe,stroke:#1e40af
+    style BLOCK fill:#dbeafe,stroke:#1e40af
+    style PAUSE fill:#fee2e2,stroke:#b91c1c
 ```
-core/   The engine, an installable `relay` package. Triage, the manual tool-use loop, the gate,
-        faithfulness, cost, and a mock SQLite backend. Knows nothing about HTTP or UI.  (depends on: nothing)
-api/    A thin FastAPI adapter. Serializes the engine to a RunView over HTTP and solves
-        suspend/resume across two requests (/handle then /approve) with a durable per-run file DB.  (depends on: core)
-app/    The frontend, a high-fidelity React prototype wired to the live API. Renders the RunView and
-        holds no business logic. The pause is real, over HTTP.  (depends on: api)
-eval/   The offline eval harness. Imports `relay` directly (no server) and produces the leaderboard
-        above plus the deterministic CI gate.  (depends on: core)
+
+It is a **4-layer stack**, and the load-bearing fact is that everything imports the engine directly:
+there is no service-to-service HTTP between Python components. The one HTTP hop is the browser, which
+can't import a Python module.
+
+```mermaid
+flowchart LR
+    EVAL["eval/<br/>harness ×N, parallel-safe"] --> CORE
+    CLI["relay.cli<br/>handle / approve"] --> CORE
+    APP["app/<br/>browser · renders only"] -- "HTTP / fetch" --> API
+    API["api/<br/>thin FastAPI adapter"] --> CORE
+    CORE["core/ — the engine<br/>triage · loop · GATE · faithfulness · cost · backend"]
+    CORE <--> DB[("per-run SQLite<br/>runs · llm_calls · actions_log · tool_calls")]
+    style CORE fill:#dbeafe,stroke:#1e40af
+    style API fill:#dbeafe,stroke:#1e40af
+    style EVAL fill:#fef9c3,stroke:#a16207
+    style APP fill:#fef9c3,stroke:#a16207
+    style CLI fill:#fef9c3,stroke:#a16207
 ```
+
+- **`core/`** — the engine, an installable `relay` package. Triage, the manual tool-use loop, the gate, faithfulness, cost, and a mock SQLite backend. Knows nothing about HTTP or UI. *(depends on: nothing)*
+- **`api/`** — a thin FastAPI adapter. Serializes the engine to a RunView over HTTP and solves suspend/resume across two requests (`/handle` then `/approve`) with a durable per-run file DB. *(depends on: core)*
+- **`app/`** — the frontend, a high-fidelity browser prototype wired to the live API. Renders the RunView and holds no business logic. The pause is real, over HTTP. *(depends on: api)*
+- **`eval/`** — the offline eval harness. Imports `relay` directly (no server) and produces the leaderboard above plus the deterministic safety tier. *(depends on: core)*
 
 Two load-bearing design choices:
 
 - **A manual tool-use loop, never the SDK's auto tool-runner.** Human-in-the-loop approval requires intercepting each tool call before execution; the auto-runner would fire the tool for you.
 - **The gate is deterministic code,** keyed by tool name to a policy, run on every proposed call. The model proposes; the engine decides whether an action needs approval. That is the safety contract.
 
-For the full story, read **[the writeup in `docs/writeup.md`](docs/writeup.md)**: why ungated AI automation doesn't ship, and how a deterministic approval gate fixes it.
+For the full picture — the request lifecycle, suspend/resume across two processes, the ledger and the
+invariant, the two-tier verification discipline, and the provider seam — read
+**[`docs/architecture.md`](docs/architecture.md)**. For the *idea* behind it, read
+**[the writeup in `docs/writeup.md`](docs/writeup.md)**: why ungated AI automation doesn't ship, and
+how a deterministic approval gate fixes it.
 
 ---
 
