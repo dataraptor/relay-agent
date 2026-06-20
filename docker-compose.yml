@@ -1,0 +1,29 @@
+# Relay — one-command local Docker deploy (engine + API + static frontend on one port).
+#
+#   docker compose up --build           # live demo — reads provider keys from .env (if present)
+#   RELAY_STUB=1 docker compose up --build   # offline canned demo — no key, no model calls
+#
+# Then open http://localhost:8000/  (set HOST_PORT to remap, e.g. HOST_PORT=9000 docker compose up).
+services:
+  relay:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: relay:latest
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+    # Provider keys come from .env at runtime (never baked into the image). Optional: with no
+    # .env and no RELAY_STUB the app still loads and shows the honest missing-key banner.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Set RELAY_STUB=1 (e.g. `RELAY_STUB=1 docker compose up`) for the offline canned demo.
+      RELAY_STUB: "${RELAY_STUB:-}"
+    volumes:
+      # Persist suspended-run transcripts across container restarts (so /approve survives a bounce).
+      - relay-run-store:/srv/run-store
+    restart: unless-stopped
+
+volumes:
+  relay-run-store:

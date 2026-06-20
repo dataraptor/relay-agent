@@ -1,0 +1,38 @@
+# Build context hygiene for `docker build -f api/Dockerfile .` (context = repo root).
+# Keep the image small and — critically — never bake secrets or local caches into a layer.
+
+# Secrets / local env (the image takes keys at *runtime* via --env-file / compose, never baked in).
+.env
+**/.env
+!**/.env.example
+
+# VCS / tooling
+.git
+.gitignore
+.claude
+.ruff_cache
+**/.ruff_cache
+
+# Python build/test detritus (stale bytecode + editable-install artifacts bloat layers).
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+**/.pytest_cache
+**/.coverage
+**/htmlcov
+**/.venv
+**/venv
+
+# Node (the frontend is static; tests + deps are not needed at runtime).
+**/node_modules
+app/tests
+
+# Repo-only material not needed to run the service.
+tmp
+eval
+docs/media/_frames
+*.log
+
+# This file / compose itself
+.dockerignore
+docker-compose.yml

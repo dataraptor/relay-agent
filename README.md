@@ -143,9 +143,18 @@ cd app && npm run e2e    # the cross-stack invariant proof (boots a real server)
 
 Copy `core/.env.example` (or `api/.env.example`) to `.env` and set **any one** of: `ANTHROPIC_API_KEY` (Claude), `OPENAI_API_KEY` (api.openai.com), or the Azure trio `AZURE_OPENAI_ENDPOINT` + `AZURE_OPENAI_API_KEY` + `OPENAI_API_VERSION` (the gpt-5.5 deployment this repo ships against). Keys are never committed (`.env` is gitignored).
 
+### Docker
+
+```bash
+docker compose up --build                 # live demo (keys from .env) → http://localhost:8000/
+RELAY_STUB=1 docker compose up --build     # offline canned demo: no key, no model calls
+```
+
+One image (`api/Dockerfile`) serves the engine + API + static frontend on one port. Keys are passed at runtime via `.env` (never baked in); the prototype pulls React/ReactDOM/Babel from the unpkg CDN, so the browser needs internet. `/health` is the built-in container healthcheck.
+
 ### Deploy note
 
-`python demo.py` is a single-process, same-origin demo host (engine + API + static frontend on one port); a `Dockerfile` is in `api/`. This is a **single-user demo**, not production infra: the run registry is in-process (a process restart loses the `run_id → provider` map, though the per-run file DB persists losslessly), there is no auth/multi-tenant/rate-limiting, and the backend is a mock. The single biggest "make it real" step is replacing the mock backend with real connectors (Gmail/Zendesk/Salesforce) behind the same tool interface — see [Limitations](#limitations--whats-deliberately-not-here).
+`python demo.py` is a single-process, same-origin demo host (engine + API + static frontend on one port); a `Dockerfile` is in `api/` and a `docker-compose.yml` at the root. This is a **single-user demo**, not production infra: the run registry is in-process (a process restart loses the `run_id → provider` map, though the per-run file DB persists losslessly), there is no auth/multi-tenant/rate-limiting, and the backend is a mock. The single biggest "make it real" step is replacing the mock backend with real connectors (Gmail/Zendesk/Salesforce) behind the same tool interface — see [Limitations](#limitations--whats-deliberately-not-here).
 
 ---
 

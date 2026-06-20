@@ -73,10 +73,23 @@ curl -s -X POST localhost:8000/approve \
 
 ### Docker (single-process demo)
 
+From the **repo root** (the build context needs `core/`, `api/`, and `app/`):
+
 ```bash
-docker build -f api/Dockerfile -t relay-api .   # build from the repo root
-docker run --rm -p 8000:8000 --env-file .env relay-api
+# Compose — the one-command path (reads keys from .env if present):
+docker compose up --build                    # live demo  → http://localhost:8000/
+RELAY_STUB=1 docker compose up --build        # offline canned demo (no key, no model calls)
+
+# Or plain docker:
+docker build -f api/Dockerfile -t relay .
+docker run --rm -p 8000:8000 --env-file .env relay        # live
+docker run --rm -p 8000:8000 -e RELAY_STUB=1 relay        # offline stub
 ```
+
+Keys are passed at **runtime** (never baked into the image). The container serves the API + static
+frontend; the prototype pulls React/ReactDOM/Babel from the unpkg CDN, so the **browser** needs
+internet. `/health` is the container HEALTHCHECK (works with or without a key). With no key and no
+`RELAY_STUB` the app still loads and shows the honest missing-key banner.
 
 ## Configuration (env)
 
