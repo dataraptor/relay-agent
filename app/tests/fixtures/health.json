@@ -1,0 +1,7 @@
+{
+  "status": "ok",
+  "providers_available": {
+    "anthropic": false,
+    "openai": false
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "providers": [
+    "anthropic",
+    "openai"
+  ],
+  "models_by_provider": {
+    "anthropic": [
+      "claude-sonnet-4-6",
+      "claude-haiku-4-5",
+      "claude-opus-4-8"
+    ],
+    "openai": [
+      "gpt-5.5"
+    ]
+  },
+  "policies": [
+    "auto",
+    "default",
+    "strict"
+  ],
+  "default_provider": "anthropic",
+  "default_model_by_provider": {
+    "anthropic": "claude-sonnet-4-6",
+    "openai": "gpt-5.5"
+  }
+}

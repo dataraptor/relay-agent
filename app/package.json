@@ -1,0 +1,10 @@
+{
+  "name": "relay-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Relay frontend: the DC design prototype wired to the live Relay API (Split 08).",
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.js\"",
+    "coverage": "node --test --experimental-test-coverage \"tests/**/*.test.js\""
+  }
+}

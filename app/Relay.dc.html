@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<script src="./api.js"></script>
+<script src="./map.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *{ box-sizing:border-box; }
+    html,body{ margin:0; padding:0; }
+    body{ font-family:'Inter',-apple-system,'Segoe UI',sans-serif; -webkit-font-smoothing:antialiased; color:#0A0A0B; background:#FFFFFF; }
+    @keyframes rl-spin{ to{ transform:rotate(360deg); } }
+    @keyframes rl-shimmer{ 0%{ background-position:-200px 0; } 100%{ background-position:calc(200px + 100%) 0; } }
+    @keyframes rl-caret{ 0%,49%{ opacity:1; } 50%,100%{ opacity:0; } }
+    @keyframes rl-sheet{ from{ transform:translate(-50%,16px); opacity:0; } to{ transform:translate(-50%,0); opacity:1; } }
+    @keyframes rl-modal{ from{ transform:translate(-50%,-46%); opacity:0; } to{ transform:translate(-50%,-50%); opacity:1; } }
+    .rl-sheet{ position:fixed; z-index:50; left:50%; top:50%; transform:translate(-50%,-50%); width:min(480px,100%); max-height:88vh; overflow-y:auto; border-radius:16px; animation:rl-modal 0.26s cubic-bezier(0.32,0.72,0,1); }
+    .rl-grab{ display:none; }
+    @media (max-width:640px){
+      .rl-sheet{ top:auto; bottom:0; transform:translateX(-50%); border-radius:16px 16px 0 0; animation:rl-sheet 0.32s cubic-bezier(0.32,0.72,0,1); }
+      .rl-grab{ display:block; }
+    }
+    @keyframes rl-scrim{ from{ opacity:0; } to{ opacity:1; } }
+    @keyframes rl-row{ from{ transform:translateY(6px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
+    textarea,input,button{ font-family:inherit; }
+    textarea:focus,input:focus{ outline:none; }
+  </style>
+</helmet>
+
+<div style="position:relative; min-height:100vh; background:#FFFFFF;">
+
+    <!-- APP BAR -->
+    <header style="position:sticky; top:0; z-index:30; background:rgba(255,255,255,0.88); backdrop-filter:saturate(140%) blur(10px); border-bottom:1px solid #ECECEE;">
+      <div style="max-width:820px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px; height:60px; padding:0 clamp(16px,4vw,24px);">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+          <span style="flex:none; width:24px; height:24px; border-radius:7px; background:#0A0A0B; display:inline-flex; align-items:center; justify-content:center; color:#FFFFFF; font-size:13px; font-weight:600;">R</span>
+          <span style="font-size:16px; font-weight:600; letter-spacing:-0.01em;">Relay</span>
+          <span style="font-size:13px; color:#A1A1AA; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">support triage</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; position:relative; flex:none;">
+          <button onClick="{{ openConfig }}" style="display:flex; align-items:center; gap:7px; height:36px; padding:0 12px; background:#FFFFFF; border:1px solid #DEDEE2; border-radius:9px; color:#0A0A0B; font-size:13px; font-weight:500; cursor:pointer;" style-hover="border-color:#A1A1AA;">
+            <span style="flex:none; width:7px; height:7px; border-radius:50%; background:#0A0A0B; display:inline-block;"></span>
+            <span>{{ provider }}</span>
+            <span style="color:#A1A1AA; font-size:11px;">▾</span>
+          </button>
+          <button onClick="{{ toggleDemo }}" style="display:inline-flex; align-items:center; justify-content:center; gap:5px; height:36px; padding:0 11px; background:transparent; border:1px solid #ECECEE; border-radius:9px; color:#52525B; font-size:12px; cursor:pointer;" style-hover="background:#FAFAFA;">
+            <span style="display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px; border:1.4px solid #A1A1AA; border-radius:50%; font-size:10px; font-style:italic; font-weight:600; color:#A1A1AA;">i</span>
+            <span>demo</span>
+          </button>
+          <sc-if value="{{ demoOpen }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ toggleDemo }}" style="position:fixed; inset:0; z-index:40;"></div>
+            <div style="position:absolute; top:46px; right:0; z-index:45; width:248px; background:#FFFFFF; border:1px solid #ECECEE; border-radius:12px; box-shadow:0 12px 32px rgba(10,10,11,0.14); padding:13px 14px;">
+              <div style="font-size:12.5px; line-height:1.55; color:#52525B;">Runs against an in-process SQLite mock CRM (~8 synthetic customers, ~12–15 invented policy snippets). No real customer is contacted; no real money moves.</div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </header>
+
+    <!-- missing key banner -->
+    <sc-if value="{{ keyBanner }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex; gap:8px; align-items:flex-start; padding:10px 16px; background:#FEF2F2; border-bottom:1px solid #FAD4D4; color:#0A0A0B; font-size:12.5px;">
+        <span style="color:#DC2626; font-weight:600;">!</span>
+        <span>{{ keyBanner }}</span>
+      </div>
+    </sc-if>
+
+    <main style="max-width:820px; margin:0 auto; padding:24px clamp(16px,4vw,24px) 0;">
+
+      <!-- COMPOSER -->
+      <sc-if value="{{ showComposer }}" hint-placeholder-val="{{ true }}">
+        <section style="border:1px solid #ECECEE; border-radius:12px; padding:14px; margin-bottom:14px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
+            <span style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B;">Ticket</span>
+            <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
+              <sc-for list="{{ examples }}" as="ex" hint-placeholder-count="4">
+                <button onClick="{{ ex.onClick }}" style="{{ ex.style }}">
+                  <sc-if value="{{ ex.lock }}" hint-placeholder-val="{{ false }}">
+                    <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style="margin-right:3px; vertical-align:-1px;"><rect x="2.2" y="5.2" width="7.6" height="5.4" rx="1.2" stroke="currentColor" stroke-width="1.1"/><path d="M3.8 5.2V4a2.2 2.2 0 0 1 4.4 0v1.2" stroke="currentColor" stroke-width="1.1"/></svg>
+                  </sc-if>
+                  <span>{{ ex.label }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+          <textarea value="{{ ticketText }}" onChange="{{ onTicketInput }}" placeholder="Paste a ticket or pick an example" rows="5" style="width:100%; resize:none; border:1px solid #DEDEE2; border-radius:8px; background:#FAFAFA; padding:11px 12px; font-size:14px; line-height:1.5; color:#0A0A0B;"></textarea>
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-top:9px;">
+            <span style="font-size:12px; color:#A1A1AA; font-family:'JetBrains Mono',monospace;">{{ provider }} · {{ model }} · {{ policy }}</span>
+            <span style="font-size:11px; color:#A1A1AA;">{{ charCount }} chars</span>
+          </div>
+        </section>
+      </sc-if>
+
+      <!-- collapsed ticket summary -->
+      <sc-if value="{{ showTicketSummary }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ reExpand }}" style="display:flex; width:100%; align-items:center; justify-content:space-between; border:1px solid #ECECEE; border-radius:12px; padding:12px 14px; margin-bottom:14px; background:#FFFFFF; cursor:pointer; text-align:left;">
+          <span style="font-size:13.5px; color:#0A0A0B;">Ticket · <span style="color:#52525B;">{{ ticketSummaryIntent }}</span></span>
+          <span style="color:#A1A1AA; font-size:12px;">⌄</span>
+        </button>
+      </sc-if>
+
+      <!-- BACKEND RECORDS -->
+      <sc-if value="{{ showRecords }}" hint-placeholder-val="{{ false }}">
+        <section style="border:1px solid #ECECEE; border-radius:12px; padding:14px; margin-bottom:14px;">
+          <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:10px;">Records in play</div>
+          <sc-if value="{{ recordsEmpty }}" hint-placeholder-val="{{ true }}">
+            <div style="font-size:13px; color:#A1A1AA;">Loads after lookup_customer runs.</div>
+          </sc-if>
+          <sc-if value="{{ recordsPopulated }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; flex-direction:column; gap:11px;">
+              <div>
+                <div style="font-size:12px; color:#52525B; margin-bottom:3px;">Customer</div>
+                <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#0A0A0B;">{{ rec_email }}</div>
+                <div style="display:flex; align-items:center; gap:7px; margin-top:3px; font-size:12.5px; color:#52525B;">
+                  <span>{{ rec_plan }} · {{ rec_status }}</span>
+                  <sc-if value="{{ rec_hasFlag }}" hint-placeholder-val="{{ false }}">
+                    <span style="display:inline-flex; align-items:center; gap:3px; color:#0A0A0B; font-weight:500;"><span style="color:#52525B;">⚑</span>{{ rec_flag }}</span>
+                  </sc-if>
+                </div>
+              </div>
+              <div style="height:1px; background:#ECECEE;"></div>
+              <div>
+                <div style="font-size:12px; color:#52525B; margin-bottom:3px;">Ticket {{ rec_ticketId }}</div>
+                <div style="display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:13px;">
+                  <span style="color:#52525B;">status</span>
+                  <span style="{{ rec_statusStyle }}">{{ rec_ticketStatus }}</span>
+                  <sc-if value="{{ rec_hasProposed }}" hint-placeholder-val="{{ false }}">
+                    <span style="color:#A1A1AA;">→</span>
+                    <span style="{{ rec_proposedStyle }}">{{ rec_proposedStatus }}{{ rec_proposedMark }}</span>
+                  </sc-if>
+                </div>
+                <div style="display:flex; align-items:center; gap:8px; font-family:'JetBrains Mono',monospace; font-size:13px; margin-top:5px;">
+                  <span style="color:#52525B;">queue</span>
+                  <span style="{{ rec_queueStyle }}">{{ rec_queue }}</span>
+                </div>
+                <sc-if value="{{ rec_caption }}" hint-placeholder-val="{{ false }}">
+                  <div style="font-size:11.5px; color:#A1A1AA; margin-top:7px;">{{ rec_caption }}</div>
+                </sc-if>
+              </div>
+            </div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <!-- TRIAGE -->
+      <sc-if value="{{ showTriage }}" hint-placeholder-val="{{ false }}">
+        <section style="border:1px solid #ECECEE; border-radius:12px; padding:14px; margin-bottom:14px;">
+          <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:10px;">Triage</div>
+          <sc-if value="{{ triageLoading }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex; flex-direction:column; gap:9px;">
+              <div style="height:18px; width:55%; border-radius:5px; background:linear-gradient(90deg,#F4F4F5 25%,#ECECEE 37%,#F4F4F5 63%); background-size:400px 100%; animation:rl-shimmer 1.3s infinite;"></div>
+              <div style="height:13px; width:40%; border-radius:5px; background:linear-gradient(90deg,#F4F4F5 25%,#ECECEE 37%,#F4F4F5 63%); background-size:400px 100%; animation:rl-shimmer 1.3s infinite;"></div>
+              <div style="height:13px; width:70%; border-radius:5px; background:linear-gradient(90deg,#F4F4F5 25%,#ECECEE 37%,#F4F4F5 63%); background-size:400px 100%; animation:rl-shimmer 1.3s infinite;"></div>
+              <div style="font-size:12px; color:#A1A1AA; margin-top:2px;">Classifying…</div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ triagePresent }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="font-size:18px; font-weight:600; letter-spacing:-0.01em; font-family:'JetBrains Mono',monospace;">{{ t_intent }}</div>
+              <div style="display:flex; align-items:center; justify-content:space-between; margin:9px 0 14px;">
+                <span style="display:inline-flex; align-items:center; gap:7px; {{ t_priorityStyle }}">
+                  <span style="{{ t_dotStyle }}"></span>{{ t_priority }}
+                </span>
+                <span style="font-size:12.5px; color:#52525B;">confidence <span style="{{ t_confStyle }}">{{ t_confidence }}</span></span>
+              </div>
+              <sc-if value="{{ t_lowConf }}" hint-placeholder-val="{{ false }}">
+                <div style="font-size:12px; color:#A1A1AA; margin:-8px 0 12px;">low → biases to route / escalate</div>
+              </sc-if>
+              <div style="display:flex; flex-direction:column; gap:7px; font-family:'JetBrains Mono',monospace; font-size:13px;">
+                <sc-for list="{{ t_fields }}" as="f" hint-placeholder-count="4">
+                  <div style="display:flex; justify-content:space-between; gap:12px;">
+                    <span style="color:#52525B;">{{ f.key }}</span>
+                    <span style="{{ f.style }}">{{ f.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <!-- TRACE -->
+      <sc-if value="{{ showTrace }}" hint-placeholder-val="{{ false }}">
+        <section style="border:1px solid #ECECEE; border-radius:12px; padding:14px 14px 4px; margin-bottom:14px;">
+          <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:6px;">Run</div>
+          <sc-for list="{{ trace }}" as="row" hint-placeholder-count="0">
+            <div style="{{ row.wrapStyle }}">
+              <!-- read / auto / approved / rejected / blocked rows -->
+              <sc-if value="{{ row.isSimple }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex; gap:9px; align-items:flex-start;">
+                  <span style="flex:none; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; margin-top:1px;">{{ row.glyphEl }}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px;">
+                      <span style="font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:500; color:{{ row.toolColor }};">{{ row.tool }}</span>
+                      <sc-if value="{{ row.hasLatency }}" hint-placeholder-val="{{ false }}">
+                        <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#A1A1AA;">{{ row.latency }}</span>
+                      </sc-if>
+                    </div>
+                    <sc-if value="{{ row.hasArgs }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#A1A1AA; margin-top:2px;">{{ row.argsLine }}</div>
+                    </sc-if>
+                    <sc-if value="{{ row.hasResult }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:12.5px; color:{{ row.resultColor }}; margin-top:3px;">{{ row.resultLine }}</div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- awaiting approval row -->
+              <sc-if value="{{ row.isAwaiting }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; gap:9px; align-items:center; background:#FAFAFA; border:1px solid #E4E4E7; border-radius:9px; padding:11px 12px; margin:2px 0;">
+                  <span style="flex:none; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">{{ row.glyphEl }}</span>
+                  <div style="flex:1;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:500; color:#0A0A0B;">{{ row.tool }}</div>
+                    <div style="font-size:12.5px; color:#52525B; margin-top:1px;">Awaiting approval</div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- draft reply row -->
+              <sc-if value="{{ row.isReply }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; gap:9px; align-items:flex-start;">
+                  <span style="flex:none; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; margin-top:1px;">{{ row.glyphEl }}</span>
+                  <div style="flex:1; min-width:0;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:500; color:#0A0A0B;">draft_reply</div>
+                    <div style="background:#FAFAFA; border:1px solid #ECECEE; border-radius:9px; padding:11px 12px; margin-top:7px; font-size:14px; line-height:1.5; color:#0A0A0B; max-width:64ch;">{{ row.replyBody }}<sc-if value="{{ row.streaming }}" hint-placeholder-val="{{ false }}"><span style="display:inline-block; width:2px; height:15px; background:#0A0A0B; margin-left:1px; vertical-align:-2px; animation:rl-caret 1s steps(1) infinite;"></span></sc-if></div>
+                    <sc-if value="{{ row.hasCitations }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-top:8px;">
+                        <div style="font-size:11.5px; color:#52525B; margin-bottom:4px;">Citations</div>
+                        <sc-for list="{{ row.citeList }}" as="c" hint-placeholder-count="1">
+                          <button onClick="{{ c.onClick }}" style="display:flex; align-items:center; gap:6px; width:100%; text-align:left; background:none; border:none; padding:3px 0; cursor:pointer; color:#0A0A0B;">
+                            <sup style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#52525B;">{{ c.marker }}</sup>
+                            <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#52525B;">{{ c.label }}</span>
+                            <span style="color:#A1A1AA; font-size:11px; margin-left:auto;">{{ c.chevron }}</span>
+                          </button>
+                          <sc-if value="{{ c.open }}" hint-placeholder-val="{{ false }}">
+                            <div style="background:#FAFAFA; border:1px solid #ECECEE; border-radius:8px; padding:9px 10px; margin:2px 0 4px;">
+                              <div style="font-size:12.5px; line-height:1.5; color:#0A0A0B;">{{ c.text }}</div>
+                              <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#A1A1AA; margin-top:6px;">{{ c.chunk_id }} · {{ c.url }}</div>
+                            </div>
+                          </sc-if>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ row.hasFaith }}" hint-placeholder-val="{{ false }}">
+                      <button onClick="{{ row.faithOnClick }}" style="display:flex; align-items:center; gap:6px; margin-top:8px; background:none; border:none; padding:0; cursor:pointer;">
+                        <span style="width:15px; height:15px; display:inline-flex; align-items:center; justify-content:center;">{{ row.faithGlyphEl }}</span>
+                        <span style="font-size:12.5px; color:{{ row.faithColor }}; font-weight:{{ row.faithWeight }};">{{ row.faithLabel }}</span>
+                        <span style="color:#A1A1AA; font-size:11px;">{{ row.faithChevron }}</span>
+                      </button>
+                      <sc-if value="{{ row.claimsOpen }}" hint-placeholder-val="{{ false }}">
+                        <div style="margin-top:6px; display:flex; flex-direction:column; gap:5px;">
+                          <sc-for list="{{ row.claimList }}" as="cl" hint-placeholder-count="3">
+                            <div style="display:flex; gap:7px; align-items:baseline; font-size:12px;">
+                              <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; font-weight:500; color:{{ cl.color }}; flex:none;">{{ cl.label }}</span>
+                              <span style="color:#52525B;">{{ cl.text }}</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </sc-if>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ multiPendingNote }}" hint-placeholder-val="{{ false }}">
+            <div style="font-size:12px; color:#4338CA; padding:6px 0 10px;">{{ multiPendingNote }}</div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <!-- OUTCOME -->
+      <sc-if value="{{ showOutcome }}" hint-placeholder-val="{{ false }}">
+        <section style="border:1px solid #ECECEE; border-radius:12px; padding:14px; margin-bottom:14px;">
+          <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:10px;">Outcome</div>
+          <div style="font-size:15px; line-height:1.55; color:#0A0A0B;">{{ o_summary }}</div>
+          <div style="font-size:12.5px; color:#52525B; margin-top:8px;">{{ o_statusLine }}</div>
+          <div style="height:1px; background:#ECECEE; margin:13px 0;"></div>
+          <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px;">
+            <span style="font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:500; color:#0A0A0B;">{{ costText }} / ticket</span>
+            <span style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#52525B;">{{ latencyText }}</span>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#A1A1AA; margin-top:5px;">{{ tokensText }}</div>
+          <button onClick="{{ toggleCost }}" style="display:flex; align-items:center; justify-content:space-between; width:100%; background:none; border:none; padding:8px 0 0; cursor:pointer;">
+            <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#52525B;">{{ providerModelText }}</span>
+            <span style="font-size:11px; color:#A1A1AA;">{{ costChevron }} more</span>
+          </button>
+          <sc-if value="{{ costOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:9px; padding-top:9px; border-top:1px solid #ECECEE; display:flex; flex-direction:column; gap:5px;">
+              <sc-for list="{{ costBreakdown }}" as="cb" hint-placeholder-count="3">
+                <div style="display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; font-size:12px;">
+                  <span style="color:#52525B;">{{ cb.kind }}</span>
+                  <span style="color:#0A0A0B;">{{ cb.cost }}</span>
+                </div>
+              </sc-for>
+              <div style="font-size:11.5px; color:#A1A1AA; margin-top:4px;">{{ cacheLine }}</div>
+            </div>
+          </sc-if>
+        </section>
+      </sc-if>
+
+      <div style="height:128px;"></div>
+    </main>
+
+    <!-- STICKY ACTION BAR -->
+    <sc-if value="{{ showActionBar }}" hint-placeholder-val="{{ true }}">
+      <div style="position:fixed; left:0; right:0; bottom:0; z-index:25; padding:28px clamp(16px,4vw,24px) calc(18px + env(safe-area-inset-bottom)); background:linear-gradient(180deg,rgba(255,255,255,0) 0%,#FFFFFF 34%); pointer-events:none;">
+        <div style="max-width:820px; margin:0 auto; pointer-events:auto;">
+          <sc-if value="{{ abIdle }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ onRun }}" style="{{ runBtnStyle }}">{{ runLabel }}</button>
+          </sc-if>
+          <sc-if value="{{ abRunning }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative; height:52px; border-radius:11px; background:#FAFAFA; border:1px solid #ECECEE; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+              <span style="font-size:14px; font-weight:500; color:#52525B;">Running · {{ stepLabel }}</span>
+              <div style="position:absolute; bottom:0; left:0; height:2px; width:100%; background:linear-gradient(90deg,#0A0A0B 30%,transparent 30%); background-size:24px 100%; animation:rl-shimmer 0.9s linear infinite;"></div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SCRIM -->
+    <sc-if value="{{ anySheet }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ onScrim }}" style="position:fixed; inset:0; z-index:40; background:rgba(10,10,11,0.32); animation:rl-scrim 0.2s ease-out;"></div>
+    </sc-if>
+
+    <!-- GATE SHEET -->
+    <sc-if value="{{ gateOpen }}" hint-placeholder-val="{{ false }}">
+      <div class="rl-sheet" style="background:#FFFFFF; box-shadow:0 0 0 1px #ECECEE, 0 24px 64px rgba(10,10,11,0.22); padding:8px 18px calc(20px + env(safe-area-inset-bottom));">
+        <div class="rl-grab" style="width:36px; height:4px; border-radius:99px; background:#E4E4E7; margin:6px auto 14px;"></div>
+        <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:14px;">
+          <span style="flex:none; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;">
+            <svg width="17" height="17" viewBox="0 0 18 18" fill="none"><rect x="3" y="8" width="12" height="8" rx="1.6" stroke="#0A0A0B" stroke-width="1.5"/><path d="M5.5 8V6a3.5 3.5 0 0 1 7 0v2" stroke="#0A0A0B" stroke-width="1.5"/></svg>
+          </span>
+          <div>
+            <div style="font-size:16px; font-weight:600; color:#0A0A0B;">Approval required</div>
+            <div style="font-size:12.5px; color:#52525B; margin-top:1px;">State-change · gated by code, not the model</div>
+          </div>
+        </div>
+
+        <div style="height:1px; background:#ECECEE; margin:0 0 13px;"></div>
+
+        <div style="font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:500; color:#0A0A0B; margin-bottom:9px;">{{ g_tool }}</div>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:14px;">
+          <sc-for list="{{ g_args }}" as="a" hint-placeholder-count="3">
+            <div style="display:flex; gap:12px; align-items:flex-start;">
+              <span style="flex:none; width:84px; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#52525B; padding-top:5px;">{{ a.key }}</span>
+              <sc-if value="{{ a.editing }}" hint-placeholder-val="{{ false }}">
+                <input value="{{ a.value }}" onChange="{{ a.onInput }}" style="flex:1; min-width:0; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#0A0A0B; background:#FFFFFF; border:1px solid #0A0A0B; border-radius:6px; padding:5px 8px;" />
+              </sc-if>
+              <sc-if value="{{ a.readonly }}" hint-placeholder-val="{{ true }}">
+                <span style="flex:1; min-width:0; font-family:'JetBrains Mono',monospace; font-size:12.5px; color:#0A0A0B; padding-top:4px;">{{ a.value }}</span>
+              </sc-if>
+            </div>
+          </sc-for>
+        </div>
+
+        <sc-if value="{{ g_irreversible }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; gap:7px; align-items:center; background:#FEF2F2; border:1px solid #FAD4D4; border-radius:8px; padding:9px 11px; margin-bottom:13px;">
+            <span style="color:#DC2626; font-weight:700;">!</span>
+            <span style="font-size:12.5px; color:#0A0A0B;">Irreversible · emails the customer</span>
+          </div>
+        </sc-if>
+
+        <div style="height:1px; background:#ECECEE; margin:0 0 13px;"></div>
+        <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:5px;">Why</div>
+        <div style="font-size:13.5px; line-height:1.5; color:#0A0A0B; margin-bottom:14px;">{{ g_rationale }}</div>
+
+        <div style="height:1px; background:#ECECEE; margin:0 0 13px;"></div>
+        <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:5px;">If approved</div>
+        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#0A0A0B; margin-bottom:8px;">{{ g_diffText }}</div>
+
+        <sc-if value="{{ g_injection }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#FAFAFA; border:1px solid #E4E4E7; border-radius:9px; padding:11px 12px; margin-bottom:14px;">
+            <div style="display:flex; gap:7px; align-items:flex-start;">
+              <svg width="15" height="15" viewBox="0 0 18 18" fill="none" style="flex:none; margin-top:1px;"><rect x="3" y="8" width="12" height="8" rx="1.6" stroke="#0A0A0B" stroke-width="1.5"/><path d="M5.5 8V6a3.5 3.5 0 0 1 7 0v2" stroke="#0A0A0B" stroke-width="1.5"/></svg>
+              <span style="font-size:12.5px; line-height:1.5; color:#0A0A0B;">This ticket tried to force an un-approved action. The gate is code — it held.</span>
+            </div>
+          </div>
+        </sc-if>
+
+        <div style="display:flex; flex-direction:column; gap:9px; margin-top:4px;">
+          <button onClick="{{ onApprove }}" style="height:52px; border-radius:11px; background:#0A0A0B; border:none; color:#FFFFFF; font-size:15px; font-weight:600; cursor:pointer;" style-active="background:#27272A;">{{ approveLabel }}</button>
+          <div style="display:flex; gap:9px;">
+            <button onClick="{{ onToggleEdit }}" style="flex:1; height:46px; border-radius:11px; background:#FFFFFF; border:1px solid #DEDEE2; color:#0A0A0B; font-size:14px; font-weight:500; cursor:pointer;">{{ editLabel }}</button>
+            <button onClick="{{ onReject }}" style="flex:1; height:46px; border-radius:11px; background:#FFFFFF; border:1px solid #DEDEE2; color:#52525B; font-size:14px; font-weight:500; cursor:pointer;">Reject</button>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- CONFIG SHEET -->
+    <sc-if value="{{ configOpen }}" hint-placeholder-val="{{ false }}">
+      <div class="rl-sheet" style="background:#FFFFFF; box-shadow:0 0 0 1px #ECECEE, 0 24px 64px rgba(10,10,11,0.22); padding:8px 18px calc(22px + env(safe-area-inset-bottom));">
+        <div class="rl-grab" style="width:36px; height:4px; border-radius:99px; background:#E4E4E7; margin:6px auto 16px;"></div>
+        <div style="font-size:16px; font-weight:600; margin-bottom:16px;">Run configuration</div>
+
+        <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:8px;">Provider</div>
+        <div style="display:flex; gap:8px; margin-bottom:18px;">
+          <sc-for list="{{ providerOptions }}" as="p" hint-placeholder-count="2">
+            <button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:8px;">Model</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
+          <sc-for list="{{ modelOptions }}" as="m" hint-placeholder-count="3">
+            <button onClick="{{ m.onClick }}" style="{{ m.style }}">{{ m.label }}</button>
+          </sc-for>
+        </div>
+
+        <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:8px;">Policy</div>
+        <div style="display:flex; gap:8px; margin-bottom:20px;">
+          <sc-for list="{{ policyOptions }}" as="po" hint-placeholder-count="3">
+            <button onClick="{{ po.onClick }}" style="{{ po.style }}">{{ po.label }}</button>
+          </sc-for>
+        </div>
+
+        <button onClick="{{ closeConfig }}" style="width:100%; height:48px; border-radius:11px; background:#0A0A0B; border:none; color:#FFFFFF; font-size:14px; font-weight:500; cursor:pointer;">Done</button>
+      </div>
+    </sc-if>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{
+  &quot;$preview&quot;: { &quot;width&quot;: 1024, &quot;height&quot;: 860 },
+  &quot;startExample&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;billing&quot;, &quot;tech&quot;, &quot;ambiguous&quot;, &quot;injection&quot;], &quot;default&quot;: &quot;billing&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;providerDefault&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;Anthropic&quot;, &quot;OpenAI&quot;], &quot;default&quot;: &quot;Anthropic&quot;, &quot;tsType&quot;: &quot;string&quot; },
+  &quot;policyDefault&quot;: { &quot;editor&quot;: &quot;enum&quot;, &quot;options&quot;: [&quot;auto&quot;, &quot;default&quot;, &quot;strict&quot;], &quot;default&quot;: &quot;default&quot;, &quot;tsType&quot;: &quot;string&quot; }
+}">
+class Component extends DCLogic {
+  constructor(props){
+    super(props);
+    const ex = props.startExample || 'billing';
+    this.state = {
+      // ticketText/examples/config/provider/model are filled from the backend on mount.
+      phase:'idle', example:ex, ticketText:'', ticketCollapsed:false,
+      examples:[], config:null, run_id:null, keyBanner:'',
+      provider:'anthropic', model:'',
+      policy: props.policyDefault || 'default',
+      configOpen:false, demoOpen:false,
+      triageLoading:false, triage:null,
+      trace:[], pendingRowIndex:null, pending:null,
+      editing:false, edited:{},
+      records:null, recordsState:'empty', proposedStatus:null,
+      cost:0, costBreakdown:[], tokens:null, latency:null,
+      gateOpen:false, stepLabel:'', outcome:null, decision:null,
+      citeOpenIdx:null, faithOpen:false, costOpen:false,
+    };
+    this._timers=[]; this._costTarget=0;
+  }
+  componentDidMount(){
+    this._costTimer=setInterval(()=>this.tickCost(),70);
+    this.api = window.RelayApi.makeClient();   // same-origin (served by the API)
+    this.loadMeta();
+  }
+  componentWillUnmount(){ this.clearTimers(); clearInterval(this._costTimer); }
+
+  // ---------- timing & cost ----------
+  tickCost(){ const c=this.state.cost, t=this._costTarget; if(Math.abs(c-t)>0.00004){ this.setState({cost:c+(t-c)*0.32}); } else if(c!==t){ this.setState({cost:t}); } }
+  after(d,fn){ this._timers.push(setTimeout(fn,d)); }
+  clearTimers(){ (this._timers||[]).forEach(clearTimeout); this._timers=[]; }
+  addCall(kind,amt){ this._costTarget+=amt; this.setState(s=>({costBreakdown:[...s.costBreakdown,{kind,cost:amt}]})); }
+  pushRow(r){ this.setState(s=>({trace:[...s.trace,r]})); }
+  updateLastRow(p){ this.setState(s=>{ const t=[...s.trace]; t[t.length-1]={...t[t.length-1],...p}; return {trace:t}; }); }
+  streamReply(txt){ this.setState(s=>{ const t=[...s.trace]; const i=t.length-1; t[i]={...t[i], replyBody:(t[i].replyBody||'')+txt}; return {trace:t}; }); }
+
+  // ---------- meta: config / examples / health (from the backend) ----------
+  loadMeta(){
+    Promise.all([ this.api.getConfig(), this.api.getExamples(), this.api.health() ])
+      .then(([config, examples, health])=>{
+        const provider = this.pickProvider(config, health);
+        const model = window.RelayMap.defaultModelFor(config, provider);
+        const exId = this.state.example;
+        const chosen = (examples||[]).find(e=>e.id===exId || e.label===exId) || (examples||[])[0] || null;
+        const available = (health.providers_available||{})[provider];
+        this.setState({
+          config, examples: examples||[], provider, model,
+          ticketText: chosen ? chosen.ticket : this.state.ticketText,
+          example: chosen ? chosen.id : this.state.example,
+          keyBanner: available ? '' : (provider+' API key not set \u2014 configure it to run live'),
+        });
+      })
+      .catch(err=>{ this.setState({ keyBanner: (err && err.bannerText) || 'Could not load configuration from the API.' }); });
+  }
+  pickProvider(config, health){
+    const avail = (health && health.providers_available) || {};
+    const def = (config && config.default_provider) || window.RelayMap.providersFrom(config)[0];
+    if(avail[def]) return def;
+    const firstAvail = window.RelayMap.providersFrom(config).find(p=>avail[p]);
+    return firstAvail || def;
+  }
+
+  // ---------- run loop (real API + staged reveal of the real trace) ----------
+  run(){
+    if(this.state.phase==='running' || !this.api) return;
+    const ticket=(this.state.ticketText||'').trim();
+    if(!ticket) return;
+    this.clearTimers();
+    this._costTarget=0;
+    this.setState({ phase:'running', ticketCollapsed:true, configOpen:false, demoOpen:false,
+      triage:null, triageLoading:true, trace:[], pending:null, pendingRowIndex:null, gateOpen:false,
+      outcome:null, decision:null, records:null, recordsState:'empty', proposedStatus:null,
+      run_id:null, cost:0, costBreakdown:[], tokens:null, latency:null, editing:false, edited:{},
+      citeOpenIdx:null, faithOpen:false, costOpen:false, stepLabel:'triage', keyBanner:'' });
+    this.api.handle({ ticket, provider:this.state.provider, model:this.state.model||null, policy:this.state.policy })
+      .then(rv=>this.revealRunView(rv))
+      .catch(err=>this.handleApiError(err));
+  }
+
+  // Reveal the real RunView with the prototype's calm cadence (no fabricated data).
+  revealRunView(rv){
+    const vm=window.RelayMap.runViewToState(rv);
+    this._vm=vm;
+    this.setState({ run_id:vm.run_id });
+    this.after(150,()=>{ this.setState({ triageLoading:false, triage:vm.triage }); this._costTarget=vm.cost; });
+    let t=550;
+    const rows=vm.trace;
+    rows.forEach((row)=>{
+      this.after(t,()=>{
+        this.setState({ stepLabel: row.tool });
+        if(row.kind==='reply'){
+          const body=row.replyBody||'';
+          this.pushRow({ ...row, replyBody:'', streaming:true });
+          const words=body.split(' ');
+          let wt=220;
+          words.forEach((w,i)=>{ this.after(wt,()=>this.streamReply((i?' ':'')+w)); wt+=34; });
+          this.after(wt+150,()=>this.updateLastRow({ streaming:false }));
+        } else {
+          this.pushRow(row);
+        }
+        if(row.kind==='read' && row.tool==='lookup_customer' && vm.records){
+          this.setState({ records:vm.records, recordsState:'populated' });
+        }
+      });
+      t += (row.kind==='reply') ? 950 : 560;
+    });
+    this.after(t,()=>this.finishReveal(vm));
+  }
+
+  finishReveal(vm){
+    if(vm.status==='awaiting_approval' && vm.pending){
+      this.setState({ phase:'awaiting_approval', pending:vm.pending, pendingRowIndex:vm.pendingRowIndex,
+        records:vm.records||this.state.records, recordsState:vm.recordsState, proposedStatus:vm.proposedStatus,
+        stepLabel:'awaiting approval' });
+      this.after(380,()=>this.setState({ gateOpen:true }));
+    } else {
+      this.setState({ phase:'done', stepLabel:'', records:vm.records||this.state.records,
+        recordsState:vm.recordsState, outcome:vm.outcome, tokens:vm.tokens, latency:vm.latency,
+        costBreakdown:vm.costBreakdown });
+      this._costTarget=vm.cost;
+    }
+  }
+
+  // ---------- gate actions ----------
+  finalArgsObj(){
+    const p=this.state.pending; if(!p) return {};
+    const out={}; p.args.forEach(a=>{ out[a.key] = (this.state.edited[a.key]!==undefined)?this.state.edited[a.key]:a.value; });
+    return out;
+  }
+  // ---------- decision: approve / reject over HTTP ----------
+  sendDecision(verb){
+    const p=this.state.pending; if(!p || !this.api) return;
+    const hasEdits=Object.keys(this.state.edited).length>0;
+    const decision={ approval_id:p.id, decision: verb==='allow'?'allow':'reject' };
+    if(verb==='allow' && hasEdits) decision.edited_args=this.finalArgsObj();
+    this.clearTimers();
+    this.setState({ gateOpen:false, phase:'running', stepLabel: verb==='allow'?'committing':'recording' });
+    this.api.approve({ run_id:this.state.run_id, decisions:[decision] })
+      .then(rv=>this.applyDecision(rv, verb))
+      .catch(err=>this.handleApiError(err));
+  }
+  approve(){ this.sendDecision('allow'); }
+  reject(){ this.sendDecision('reject'); }
+  applyDecision(rv, verb){
+    const vm=window.RelayMap.runViewToState(rv);
+    this._costTarget=vm.cost;
+    this.setState({ phase: vm.status==='awaiting_approval'?'awaiting_approval':'done', gateOpen:false, editing:false,
+      trace:vm.trace, pending:vm.pending, pendingRowIndex:vm.pendingRowIndex,
+      records:vm.records, recordsState:vm.recordsState, proposedStatus:vm.proposedStatus,
+      decision: verb==='allow'?'approved':'rejected',
+      outcome:vm.outcome, tokens:vm.tokens, latency:vm.latency, costBreakdown:vm.costBreakdown, stepLabel:'' });
+    if(vm.status==='awaiting_approval' && vm.pending){ this.after(380,()=>this.setState({gateOpen:true})); }
+  }
+  handleApiError(err){
+    this.clearTimers();
+    const banner=(err && err.bannerText) || (err && err.message) || 'Something went wrong talking to the API.';
+    this.setState({ phase:'idle', triageLoading:false, gateOpen:false, stepLabel:'', keyBanner:banner });
+  }
+    toggleEdit(){ this.setState(s=>({editing:!s.editing})); }
+  updateArg(key,val){ this.setState(s=>({edited:{...s.edited,[key]:val}})); }
+
+  // ---------- ui actions ----------
+  pickExample(id){ this.clearTimers(); this._costTarget=0; const ex=(this.state.examples||[]).find(e=>e.id===id); this.setState({ example:id, ticketText: ex?ex.ticket:this.state.ticketText, phase:'idle', ticketCollapsed:false, triage:null, triageLoading:false, trace:[], records:null, recordsState:'empty', outcome:null, pending:null, gateOpen:false, cost:0, costBreakdown:[], decision:null, proposedStatus:null, run_id:null }); }
+  onTicketInput(e){ this.setState({ticketText:e.target.value}); }
+  reExpand(){ this.setState({ticketCollapsed:false}); }
+  openConfig(){ this.setState({configOpen:true, demoOpen:false}); }
+  closeConfig(){ this.setState({configOpen:false}); }
+  setProvider(p){ this.setState({ provider:p, model: window.RelayMap.defaultModelFor(this.state.config, p) }); }
+  setModel(m){ this.setState({model:m}); }
+  setPolicy(p){ this.setState({policy:p}); }
+  toggleDemo(){ this.setState(s=>({demoOpen:!s.demoOpen})); }
+  toggleCite(id){ this.setState(s=>({citeOpenIdx: s.citeOpenIdx===id?null:id})); }
+  toggleCost(){ this.setState(s=>({costOpen:!s.costOpen})); }
+  onScrim(){ if(this.state.configOpen) this.setState({configOpen:false}); }
+
+  // ---------- glyphs ----------
+  glyph(kind){
+    const c=React.createElement;
+    if(kind==='spin') return c('span',{style:{display:'inline-block',width:13,height:13,border:'2px solid #ECECEE',borderTopColor:'#A1A1AA',borderRadius:'50%',animation:'rl-spin 0.7s linear infinite'}});
+    if(kind==='check') return c('svg',{width:14,height:14,viewBox:'0 0 14 14',fill:'none'},c('path',{d:'M2.6 7.4L5.6 10.4L11.4 4',stroke:'#52525B',strokeWidth:1.6,strokeLinecap:'round',strokeLinejoin:'round'}));
+    if(kind==='arrow') return c('span',{style:{color:'#0A0A0B',fontWeight:700,fontSize:13,lineHeight:1}},'\u25BA');
+    if(kind==='cross') return c('svg',{width:13,height:13,viewBox:'0 0 14 14',fill:'none'},c('path',{d:'M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5',stroke:'#A1A1AA',strokeWidth:1.5,strokeLinecap:'round'}));
+    if(kind==='auto') return c('span',{style:{display:'inline-block',width:12,height:12,border:'1.6px solid #A1A1AA',borderRadius:'50%'}});
+    if(kind==='lock') return c('svg',{width:13,height:13,viewBox:'0 0 18 18',fill:'none'},c('rect',{x:3,y:8,width:12,height:8,rx:1.6,stroke:'#4F46E5',strokeWidth:1.6}),c('path',{d:'M5.5 8V6a3.5 3.5 0 0 1 7 0v2',stroke:'#4F46E5',strokeWidth:1.6}));
+    return null;
+  }
+
+  // ---------- derived render ----------
+  fmt(n){ return String(n).replace(/\B(?=(\d{3})+(?!\d))/g,','); }
+  money(n){ return '$'+Number(n||0).toFixed(4); }
+
+  renderVals(){
+    const st=this.state;
+    const seg=(active)=> active
+      ? 'height:40px; padding:0 16px; border-radius:9px; background:#0A0A0B; border:1px solid #0A0A0B; color:#FFFFFF; font-size:13px; font-weight:500; cursor:pointer;'
+      : 'height:40px; padding:0 16px; border-radius:9px; background:#FFFFFF; border:1px solid #DEDEE2; color:#52525B; font-size:13px; font-weight:500; cursor:pointer;';
+    const exBtn=(active)=> active
+      ? 'display:inline-flex; align-items:center; padding:4px 9px; border-radius:7px; background:#0A0A0B; border:1px solid #0A0A0B; color:#FFFFFF; font-size:11.5px; cursor:pointer;'
+      : 'display:inline-flex; align-items:center; padding:4px 9px; border-radius:7px; background:transparent; border:1px solid transparent; color:#52525B; font-size:11.5px; cursor:pointer;';
+
+    // examples
+    const examples=(st.examples||[]).map(ex=>({ id:ex.id, label:ex.label, lock:!!ex.lock, style:exBtn(st.example===ex.id), onClick:()=>this.pickExample(ex.id) }));
+
+    // triage fields
+    const tr=st.triage;
+    const fieldOrder=['customer_email','order_ref','amount','product'];
+    const t_fields = tr? fieldOrder.map(k=>{
+      const v=tr.fields[k];
+      const isNull = v===null || v===undefined;
+      return { key:k, value:isNull?'null':String(v), style:'color:'+(isNull?'#A1A1AA':'#0A0A0B')+';' };
+    }) : [];
+    const prio = tr? tr.priority : '';
+    const prioUrgent = prio==='urgent';
+    const prioStyleMap={ urgent:'font-weight:600; color:#0A0A0B; font-size:14px;', high:'font-weight:500; color:#0A0A0B; font-size:14px;', normal:'color:#52525B; font-size:14px;', low:'color:#A1A1AA; font-size:14px;' };
+    const dotMap={ urgent:'width:7px;height:7px;border-radius:50%;background:#DC2626;display:inline-block;', high:'width:7px;height:7px;border-radius:50%;background:#52525B;display:inline-block;', normal:'width:7px;height:7px;border-radius:50%;border:1.4px solid #A1A1AA;display:inline-block;', low:'width:7px;height:7px;border-radius:50%;border:1.4px solid #DEDEE2;display:inline-block;' };
+
+    // records
+    const r=st.records;
+    const rs=st.recordsState;
+    const proposed = (st.edited.status!==undefined)?st.edited.status:st.proposedStatus;
+    const committedStyle='color:#0A0A0B; font-weight:500;';
+    const recCaptionMap={ nochange:'no change — rejected', blocked:'blocked by policy', committed:'committed', proposed:'', populated:'' };
+
+    // trace rows
+    const trace = st.trace.map((row,i)=>{
+      const simple = row.kind==='read'||row.kind==='auto'||row.kind==='approved'||row.kind==='rejected'||row.kind==='blocked';
+      const toolColor = row.kind==='rejected'||row.kind==='blocked'||row.kind==='auto' ? '#52525B' : '#0A0A0B';
+      const resultColor = (row.result && row.result.indexOf('rejected')>=0) ? '#52525B'
+        : (row.result && row.result.indexOf('approved')>=0) ? '#0A0A0B' : '#52525B';
+      const citeList=(row.citations||[]).map((c,ci)=>{
+        const id=i+'-'+ci; const open=st.citeOpenIdx===id;
+        return { ...c, marker:['\u00B9','\u00B2','\u00B3','\u2074'][ci]||'\u2022', open, chevron: open?'\u2715':'\u203A', onClick:()=>this.toggleCite(id) };
+      });
+      const n=(row.claims||[]).length;
+      const claimList=(row.claims||[]).map(cl=>({ ...cl, color: cl.label==='SUPPORTED'?'#52525B':'#DC2626' }));
+      return {
+        wrapStyle: i===0?'padding:8px 0; animation:rl-row 0.18s ease-out;':'padding:8px 0; border-top:1px solid #ECECEE; animation:rl-row 0.18s ease-out;',
+        glyphEl:this.glyph(row.glyph),
+        isSimple:simple, isAwaiting:row.kind==='awaiting', isReply:row.kind==='reply',
+        tool:row.tool, toolColor,
+        hasArgs:!!row.argsLine, argsLine:row.argsLine,
+        hasResult:!!row.result, resultLine:row.result, resultColor,
+        hasLatency:!!row.latency, latency:row.latency,
+        replyBody:row.replyBody||'', streaming:!!row.streaming,
+        hasCitations:(row.citations||[]).length>0, citeList,
+        hasFaith:!!row.faithLabel, faithLabel:row.faithLabel,
+        faithGlyphEl: this.glyph(row.grounded?'check':'cross'),
+        faithColor: row.grounded?'#52525B':'#0A0A0B', faithWeight: row.grounded?'400':'500',
+        faithChevron: st.faithOpen?'\u2715':'\u203A',
+        faithOnClick:()=>this.setState(s=>({faithOpen:!s.faithOpen})),
+        claimsOpen:st.faithOpen, claimList,
+      };
+    });
+
+    // gate
+    const p=st.pending;
+    const g_args=(p?p.args:[]).map(a=>{
+      const editing = st.editing && a.editable;
+      const val = (st.edited[a.key]!==undefined)?st.edited[a.key]:a.value;
+      return { key:a.key, value:val, editing, readonly:!editing, onInput:(e)=>this.updateArg(a.key,e.target.value) };
+    });
+    const diffStatus = proposed||'';
+    const g_diffText = p ? ('ticket #'+(p.args[0]?p.args[0].value:'')+'  open \u2192 '+diffStatus) : '';
+    const hasEdits = Object.keys(st.edited).length>0;
+
+    // provider/model/policy options
+    const cfg = st.config || {};
+    const providerOptions = window.RelayMap.providersFrom(cfg).map(pv=>({ label:pv, style:seg(st.provider===pv), onClick:()=>this.setProvider(pv) }));
+    const models = window.RelayMap.modelsFor(cfg, st.provider);
+    const modelOptions = models.map(m=>({ label:m, style:seg(st.model===m), onClick:()=>this.setModel(m) }));
+    const policyOptions = window.RelayMap.policiesFrom(cfg).map(po=>({ label:po, style:seg(st.policy===po), onClick:()=>this.setPolicy(po) }));
+
+    // cost breakdown display
+    const costBreakdown = st.costBreakdown.map(cb=>({ kind:cb.kind, cost:this.money(cb.cost) }));
+    const cacheRead = st.tokens ? (st.tokens.cache_read||0) : 0;
+    const cacheLine = st.provider==='openai' ? 'no prompt cache on the OpenAI path (expected)' : (cacheRead>0 ? ('cache_read '+this.fmt(cacheRead)+' tokens reused') : 'no cache hit on this run');
+
+    const tokensText = st.tokens ? ('in '+this.fmt(st.tokens.in)+' \u00B7 out '+this.fmt(st.tokens.out)+(st.tokens.cache_read? ' \u00B7 cache_read '+this.fmt(st.tokens.cache_read):'')) : '';
+
+    const intentLabel = tr? tr.intent : 'pending';
+
+    return {
+      provider:st.provider, model:st.model, policy:st.policy,
+      keyBanner: st.keyBanner,
+
+      // composer
+      showComposer: !st.ticketCollapsed,
+      showTicketSummary: st.ticketCollapsed,
+      ticketSummaryIntent: tr? tr.intent.replace(/_/g,' ') : st.example,
+      ticketText:st.ticketText, charCount:st.ticketText.length,
+      examples, onTicketInput:(e)=>this.onTicketInput(e), reExpand:()=>this.reExpand(),
+
+      // records
+      showRecords: st.phase!=='idle',
+      recordsEmpty: rs==='empty',
+      recordsPopulated: rs!=='empty' && !!r,
+      rec_email: r?r.email:'', rec_plan:r?r.plan:'', rec_status:r?r.status:'',
+      rec_hasFlag: !!(r&&r.flag), rec_flag: r?r.flag:'',
+      rec_ticketId: r?r.ticketId:'',
+      rec_ticketStatus: r?r.ticketStatus:'',
+      rec_statusStyle: (rs==='committed') ? committedStyle : 'color:#0A0A0B;',
+      rec_hasProposed: rs==='proposed' && !!proposed,
+      rec_proposedStatus: proposed||'',
+      rec_proposedMark: ' ?',
+      rec_proposedStyle: 'color:#52525B;',
+      rec_queue: r?r.queue:'', rec_queueStyle: (rs==='committed')?committedStyle:'color:#0A0A0B;',
+      rec_caption: recCaptionMap[rs]||'',
+
+      // triage
+      showTriage: st.phase!=='idle',
+      triageLoading: st.triageLoading,
+      triagePresent: !!tr,
+      t_intent: intentLabel,
+      t_priority: prio, t_priorityStyle: prioStyleMap[prio]||'', t_dotStyle: dotMap[prio]||dotMap.normal,
+      t_confidence: tr?tr.confidence:'', t_confStyle:'color:#0A0A0B; font-weight:500;',
+      t_lowConf: tr && tr.confidence==='low',
+      t_fields,
+
+      // trace
+      showTrace: st.trace.length>0,
+      trace,
+      multiPendingNote: '',
+
+      // outcome
+      showOutcome: !!st.outcome,
+      o_summary: st.outcome?st.outcome.summary:'',
+      o_statusLine: st.outcome?st.outcome.statusLine:'',
+      costText: this.money(st.cost), latencyText: st.latency||'',
+      tokensText, providerModelText: st.provider+' \u00B7 '+st.model,
+      costChevron: st.costOpen?'\u2715':'\u203A', costOpen:st.costOpen,
+      costBreakdown, cacheLine, toggleCost:()=>this.toggleCost(),
+
+      // action bar
+      showActionBar: !st.gateOpen && !st.configOpen,
+      abIdle: st.phase==='idle' || st.phase==='done',
+      abRunning: st.phase==='running',
+      runLabel: st.phase==='done' ? 'Run again' : 'Run',
+      runBtnStyle: (st.ticketText.trim().length>0)
+        ? 'width:100%; height:52px; border-radius:11px; background:#0A0A0B; border:none; color:#FFFFFF; font-size:16px; font-weight:600; cursor:pointer;'
+        : 'width:100%; height:52px; border-radius:11px; background:#E4E4E7; border:none; color:#A1A1AA; font-size:16px; font-weight:600; cursor:not-allowed;',
+      onRun:()=>{ if(st.ticketText.trim().length>0) this.run(); },
+      stepLabel: st.stepLabel,
+
+      // gate
+      gateOpen: st.gateOpen,
+      g_tool: p?p.tool:'', g_args, g_rationale: p?p.rationale:'',
+      g_diffText, g_irreversible: !!(p&&p.irreversible), g_injection: !!(p&&p.injection),
+      approveLabel: (st.editing && hasEdits)?'Approve with edits':'Approve',
+      editLabel: st.editing?'Done editing':'Edit args',
+      onApprove:()=>this.approve(), onReject:()=>this.reject(), onToggleEdit:()=>this.toggleEdit(),
+
+      // sheets / overlays
+      anySheet: st.gateOpen || st.configOpen,
+      onScrim:()=>this.onScrim(),
+      configOpen: st.configOpen, openConfig:()=>this.openConfig(), closeConfig:()=>this.closeConfig(),
+      providerOptions, modelOptions, policyOptions,
+      demoOpen: st.demoOpen, toggleDemo:()=>this.toggleDemo(),
+    };
+  }
+}
+</script>
+</body>
+</html>
