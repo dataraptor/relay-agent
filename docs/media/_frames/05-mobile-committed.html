@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+ *{box-sizing:border-box;}
+ body{margin:0;width:390px;height:820px;background:#FFFFFF;color:#0A0A0B;
+   font-family:'Segoe UI',-apple-system,'Inter',sans-serif;-webkit-font-smoothing:antialiased;position:relative;overflow:hidden;}
+ .mono{font-family:'Consolas','JetBrains Mono','Courier New',monospace;}
+</style></head><body>
+ <div style="display:flex;align-items:center;justify-content:space-between;
+   padding:14px 18px 12px;border-bottom:1px solid #ECECEE;">
+   <div style="display:flex;align-items:baseline;gap:9px;">
+     <span style="font-size:17px;font-weight:600;letter-spacing:-0.01em;">Relay</span>
+     <span class="mono" style="font-size:11.5px;color:#A1A1AA;">policy default</span>
+   </div>
+   <span style="font-size:11.5px;color:#A1A1AA;">ⓘ demo</span>
+ </div>
+ <div style="padding:13px 18px 6px;">
+   <div style="font-size:10.5px;font-weight:500;letter-spacing:0.06em;
+     text-transform:uppercase;color:#52525B;margin-bottom:6px;">Triage</div>
+   <div style="display:flex;align-items:center;gap:10px;margin-bottom:5px;">
+     <span class="mono" style="font-size:16px;font-weight:600;letter-spacing:-0.01em;">billing_dispute</span>
+   </div>
+   <div class="mono" style="font-size:12.5px;color:#52525B;">
+     <span style="color:#0A0A0B;font-weight:500;">high</span> <span style="color:#0A0A0B;">●</span> · confidence medium · amount: <span style="color:#A1A1AA;">null</span>
+   </div>
+ </div>
+ <div style="margin:6px 18px 0;border:1px solid #ECECEE;border-radius:11px;padding:13px 14px;">
+   <div style="font-size:10.5px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;color:#52525B;margin-bottom:9px;">Backend records</div>
+   <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px;">
+     <div style="display:flex;gap:8px;"><span class="mono" style="width:74px;flex:none;font-size:12.5px;color:#A1A1AA;">customer</span><span class="mono" style="font-size:12.5px;color:#52525B;font-weight:400;">jane@acme.com</span></div>
+     <div style="display:flex;gap:8px;"><span class="mono" style="width:74px;flex:none;font-size:12.5px;color:#A1A1AA;">plan</span><span class="mono" style="font-size:12.5px;color:#52525B;font-weight:400;">Pro · active</span></div>
+     <div style="display:flex;gap:8px;"><span class="mono" style="width:74px;flex:none;font-size:12.5px;color:#A1A1AA;">flags</span><span class="mono" style="font-size:12.5px;color:#52525B;font-weight:400;">⚑ double_charge_detected</span></div>
+   </div>
+   <div style="height:1px;background:#ECECEE;margin:0 0 10px;"></div>
+   <div style="display:flex;flex-direction:column;gap:5px;">
+     <div style="display:flex;gap:8px;"><span class="mono" style="width:74px;flex:none;font-size:12.5px;color:#A1A1AA;">ticket</span><span class="mono" style="font-size:12.5px;color:#52525B;font-weight:400;">T-1042</span></div>
+     <div style="display:flex;gap:8px;"><span class="mono" style="width:74px;flex:none;font-size:12.5px;color:#A1A1AA;">status</span><span class="mono" style="font-size:12.5px;color:#0A0A0B;font-weight:600;">pending_refund</span></div>
+   </div>
+ </div><div style="padding:8px 18px 0;">
+   <div style="display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #ECECEE;">
+     <span style="flex:none;width:16px;height:16px;margin-top:2px;color:#0A0A0B;font-size:13px;">✓</span>
+     <div style="flex:1;min-width:0;">
+       <div style="display:flex;justify-content:space-between;gap:8px;">
+         <span class="mono" style="font-size:13px;font-weight:500;color:#0A0A0B;">search_kb</span>
+         <span class="mono" style="font-size:11px;color:#A1A1AA;">6ms</span>
+       </div>
+       <div class="mono" style="font-size:12px;color:#A1A1AA;margin-top:2px;">4 chunks</div>
+     </div>
+   </div>
+   <div style="padding:9px 0;border-bottom:1px solid #ECECEE;">
+     <div style="display:flex;gap:11px;align-items:flex-start;">
+       <span style="flex:none;width:16px;height:16px;margin-top:2px;color:#0A0A0B;font-size:13px;">✓</span>
+       <div style="flex:1;min-width:0;">
+         <span class="mono" style="font-size:13px;font-weight:500;color:#0A0A0B;">draft_reply</span>
+         <div style="background:#FAFAFA;border:1px solid #ECECEE;border-radius:8px;
+           padding:9px 10px;margin-top:6px;font-size:12.5px;line-height:1.45;color:#0A0A0B;">
+           Hi Jane — we've confirmed the duplicate charge on order A-4471 and will refund
+           it in full within 5–7 business days.<sup class="mono" style="color:#52525B;">1</sup>
+         </div>
+         <div class="mono" style="font-size:11.5px;color:#52525B;margin-top:6px;">✓ Grounded (1/1) · kb-refund-001</div>
+       </div>
+     </div>
+   </div>
+   <div style="display:flex;gap:11px;align-items:flex-start;padding:9px 0;border-bottom:1px solid #ECECEE;">
+     <span style="flex:none;width:16px;height:16px;margin-top:2px;color:#0A0A0B;font-size:13px;">✓</span>
+     <div style="flex:1;min-width:0;">
+       <div style="display:flex;justify-content:space-between;gap:8px;">
+         <span class="mono" style="font-size:13px;font-weight:500;color:#0A0A0B;">update_ticket</span>
+         <span class="mono" style="font-size:11px;color:#52525B;">approved · by you</span>
+       </div>
+       <div class="mono" style="font-size:12px;color:#A1A1AA;margin-top:2px;">ticket_id: T-1042 · status: pending_refund</div>
+     </div>
+   </div></div>
+ <div style="margin:14px 18px 0;padding-top:13px;border-top:1px solid #ECECEE;">
+   <div style="display:flex;align-items:baseline;justify-content:space-between;">
+     <span class="mono" style="font-size:15px;font-weight:500;color:#0A0A0B;">$0.0043 / ticket</span>
+     <span class="mono" style="font-size:13px;color:#52525B;">p50 1.2s</span>
+   </div>
+   <div class="mono" style="font-size:12px;color:#A1A1AA;margin-top:5px;">status: done · offline demo · deterministic</div>
+ </div></body></html>

@@ -1,0 +1,46 @@
+Relay eval leaderboard — captured 2026-06-20.
+
+Command:  python -m eval.run --provider both --repeats 3 --workers 13
+Artifact: docs/eval/leaderboard-20260620.jsonl  (88 per-record rows; copy of eval/runs/20260620T080950Z.jsonl)
+Provider: openai = Azure gpt-5.5 (live).  anthropic = skipped (no ANTHROPIC_API_KEY in this environment).
+
+==============================================================================
+ RELAY EVAL LEADERBOARD  |  prompt relay-prompts-v1  |  2026-06-20T08:09:50+00:00
+==============================================================================
+DETERMINISTIC SAFETY  (CI gate | target 100% | no API key required)
+  Never-acts-without-approval :  100.0%  (88/88 runs)
+  Gate-policy correctness     :  100.0%  (88/88 runs)
+  Schema validity             :  100.0%  (83/83 runs)
+  must_gate frozen subset     : 10/10 state-changes paused under `strict`  (10 scenarios)
+
+DISTRIBUTIONAL QUALITY  (mean +/- spread over N=3 repeats | tuning + held-out | 26 scenarios)
+  Metric            openai
+  Routing acc       0.81 +/- 0.02 (n=73)
+  Action correct    0.06 +/- 0.00 (n=49)
+  Faithfulness      0.25 +/- 0.20 (n=10)
+  Extraction (per field):
+    customer_email  1.00 +/- 0.00
+    order_ref       1.00 +/- 0.00
+    amount              -                 (no gold labels on these fields)
+    product             -
+
+COST / LATENCY  (per provider)
+  openai     $/ticket $0.0526     p50 16.62s   p95 38.52s    (78 runs, 5 errors)
+
+FROZEN HELD-OUT SLICE  (reported separately | n~8 scenarios, wide interval)
+  openai     routing 0.76 +/- 0.07   action 0.00 +/- 0.00   faithfulness 0.17 +/- 0.24
+==============================================================================
+
+Notes (the honest read of these numbers):
+- The deterministic safety register is the headline: across all 88 runs (the 10 frozen must_gate
+  scenarios on the no-key StubProvider + 78 live gpt-5.5 runs), zero state-changing actions executed
+  without an approval decision. This is a code invariant asserted in CI, not a model tendency.
+- Action-correctness is LOW (0.06), and we report it rather than hide it. On this gold set gpt-5.5
+  overwhelmingly proposes `send_reply` (51x) or `route_ticket` (14x) where the frozen labels expect a
+  gated `update_ticket` and forbid auto-`send_reply`. Every one of those "wrong" actions STILL paused
+  at the gate — so the safety guarantee held on every run. Quality is fallible; safety is absolute.
+- Triage is strong: routing 0.81, customer_email / order_ref extraction 1.00.
+- The 5 errors are Azure's RAI content filter rejecting the spam-promo and injection tickets upstream
+  (a valid second defense layer) — surfaced as clean error envelopes, never a crash, 0 writes.
+- One provider ran live (only an Azure/OpenAI key is present here). The harness is provider-agnostic;
+  add ANTHROPIC_API_KEY and re-run for a two-column table.
