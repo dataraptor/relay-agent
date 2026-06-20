@@ -1,0 +1,142 @@
+{
+  "id": "run_8d0deaa3048543f2",
+  "run_id": "run_8d0deaa3048543f2",
+  "ticket_id": null,
+  "triage": {
+    "intent": "account_access",
+    "priority": "normal",
+    "extracted_fields": {
+      "customer_email": "sam@initech.com",
+      "order_ref": null,
+      "amount": null,
+      "product": null
+    },
+    "confidence": "low"
+  },
+  "status": "done",
+  "trace": [
+    {
+      "seq": 0,
+      "tool": "lookup_customer",
+      "cls": "read",
+      "args": {
+        "email": "sam@initech.com"
+      },
+      "result_summary": "Free · active",
+      "latency_ms": 0,
+      "decision": null,
+      "state": "executed",
+      "rationale": "",
+      "draft": null
+    },
+    {
+      "seq": 1,
+      "tool": "search_kb",
+      "cls": "read",
+      "args": {
+        "query": "account issue triage"
+      },
+      "result_summary": "4 chunks",
+      "latency_ms": 0,
+      "decision": null,
+      "state": "executed",
+      "rationale": "",
+      "draft": null
+    },
+    {
+      "seq": 2,
+      "tool": "escalate",
+      "cls": "state_change",
+      "args": {
+        "ticket_id": "T-1055",
+        "level": "tier2",
+        "rationale": "ambiguous request; needs a human"
+      },
+      "result_summary": "T-1055 · status=escalated · queue=unassigned",
+      "latency_ms": 5,
+      "decision": "auto",
+      "state": "executed",
+      "rationale": "",
+      "draft": null
+    }
+  ],
+  "actions_pending": [],
+  "actions_taken": [
+    {
+      "tool": "escalate",
+      "args": {
+        "ticket_id": "T-1055",
+        "level": "tier2",
+        "rationale": "ambiguous request; needs a human"
+      },
+      "result": {
+        "ticket": {
+          "id": "T-1055",
+          "customer_id": "C-003",
+          "subject": "Which plan includes the export feature?",
+          "body": "Hi, I'm trying to figure out which plan I need for CSV export. Can you help?",
+          "intent": "general_question",
+          "priority": "normal",
+          "status": "escalated",
+          "queue": "unassigned",
+          "updated_at": "2026-06-20T06:55:00.663359+00:00"
+        }
+      },
+      "decision": "auto",
+      "approver": null,
+      "latency_ms": null
+    }
+  ],
+  "draft_reply": null,
+  "records": {
+    "customer": {
+      "email": "sam@initech.com",
+      "plan": "Free",
+      "status": "active",
+      "mrr": 0.0,
+      "flags": {}
+    },
+    "ticket": {
+      "id": "T-1055",
+      "status": "escalated",
+      "queue": "unassigned"
+    },
+    "proposed": null
+  },
+  "cost": {
+    "total_usd": 0.0031200000000000004,
+    "by_call": [
+      {
+        "kind": "triage",
+        "cost_usd": 0.00048
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00048
+      }
+    ],
+    "tokens": {
+      "input": 520,
+      "output": 104,
+      "cache_read": 0,
+      "cache_creation": 0
+    },
+    "latency_s": 0.109062
+  },
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "prompt_version": "relay-prompts-v1",
+  "n_runs": 1
+}

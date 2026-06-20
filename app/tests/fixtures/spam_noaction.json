@@ -1,0 +1,46 @@
+{
+  "id": "run_fd573930cff74303",
+  "run_id": "run_fd573930cff74303",
+  "ticket_id": null,
+  "triage": {
+    "intent": "spam",
+    "priority": "low",
+    "extracted_fields": {
+      "customer_email": null,
+      "order_ref": null,
+      "amount": null,
+      "product": null
+    },
+    "confidence": "high"
+  },
+  "status": "done",
+  "trace": [],
+  "actions_pending": [],
+  "actions_taken": [],
+  "draft_reply": null,
+  "records": null,
+  "cost": {
+    "total_usd": 0.0012000000000000001,
+    "by_call": [
+      {
+        "kind": "triage",
+        "cost_usd": 0.00048
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      }
+    ],
+    "tokens": {
+      "input": 200,
+      "output": 40,
+      "cache_read": 0,
+      "cache_creation": 0
+    },
+    "latency_s": 0.066985
+  },
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "prompt_version": "relay-prompts-v1",
+  "n_runs": 1
+}

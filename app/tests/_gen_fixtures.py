@@ -95,6 +95,66 @@ TECH_STEPS = [
     _step("Routing to the tech queue.", _call("route_ticket", ticket_id="T-1050", queue="tech")),
 ]
 
+# -- Split 09 scenarios ------------------------------------------------------
+
+_REPLY_BODY = (
+    "Hi Jane — we've confirmed the duplicate charge on order A-4471 and will "
+    "refund it in full within 5-7 business days."
+)
+
+# Multi-pending: ONE turn proposes BOTH update_ticket AND send_reply → under strict the gate
+# pauses both, exercising the turn-granular batch (R2).
+MULTI_STEPS = [
+    _step("Looking up the customer.", _call("lookup_customer", email="jane@acme.com")),
+    _step("Checking refund policy.", _call("search_kb", query="duplicate charge refund policy")),
+    _step("Drafting a cited reply.", _call("draft_reply", body=_REPLY_BODY, citations=["kb-refund-001"])),
+    _step(
+        "Proposing a status update and a customer reply for your approval.",
+        _call("update_ticket", ticket_id="T-1042", status="pending_refund", note="dup verified"),
+        _call("send_reply", to="jane@acme.com", body=_REPLY_BODY, citations=["kb-refund-001"]),
+    ),
+]
+
+# send_reply-only: the irreversible variant (R3) — one pending send_reply with body + citations.
+SEND_REPLY_STEPS = [
+    _step("Looking up the customer.", _call("lookup_customer", email="jane@acme.com")),
+    _step("Checking refund policy.", _call("search_kb", query="duplicate charge refund policy")),
+    _step("Drafting a cited reply.", _call("draft_reply", body=_REPLY_BODY, citations=["kb-refund-001"])),
+    _step(
+        "Sending the cited reply to the customer.",
+        _call("send_reply", to="jane@acme.com", body=_REPLY_BODY, citations=["kb-refund-001"]),
+    ),
+]
+
+# Ambiguous: the loop ends by escalating (auto under the default policy) — no pending write (§9).
+AMBIGUOUS_TRIAGE = Triage(
+    intent="account_access",
+    priority="normal",
+    extracted_fields=ExtractedFields(
+        customer_email="sam@initech.com", order_ref=None, amount=None, product=None
+    ),
+    confidence="low",
+)
+AMBIGUOUS_STEPS = [
+    _step("Looking up the customer.", _call("lookup_customer", email="sam@initech.com")),
+    _step("Searching the KB.", _call("search_kb", query="account issue triage")),
+    _step(
+        "Unclear ask — escalating for a human.",
+        _call("escalate", ticket_id="T-1055", level="tier2", rationale="ambiguous request; needs a human"),
+    ),
+]
+
+# Spam: triage classifies spam; the model takes no action (no tool call) → done, 0 writes (§9).
+SPAM_TRIAGE = Triage(
+    intent="spam",
+    priority="low",
+    extracted_fields=ExtractedFields(
+        customer_email=None, order_ref=None, amount=None, product=None
+    ),
+    confidence="high",
+)
+SPAM_STEPS = [_step("This looks like spam — no action warranted.")]
+
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
@@ -134,7 +194,39 @@ def main() -> None:
     ).json()
     _write("tech_auto.json", tech)
 
-    # 5) meta — config + examples (drives the config sheet / example buttons)
+    # 5) multi-pending — one turn proposes update_ticket + send_reply, both paused under strict (R2)
+    store4 = RunStore(base_dir=str(OUT / "_runs_multi"))
+    client4 = _client(store4, _stub(BILLING_TRIAGE, MULTI_STEPS))
+    multi = client4.post(
+        "/handle", json={"ticket": "multi demo", "provider": "anthropic", "policy": "strict"}
+    ).json()
+    _write("multi_pending.json", multi)
+
+    # 6) send_reply — the irreversible variant: one pending send_reply with body + citations (R3)
+    store5 = RunStore(base_dir=str(OUT / "_runs_sendreply"))
+    client5 = _client(store5, _stub(BILLING_TRIAGE, SEND_REPLY_STEPS))
+    sr = client5.post(
+        "/handle", json={"ticket": "send reply demo", "provider": "anthropic", "policy": "strict"}
+    ).json()
+    _write("send_reply_pending.json", sr)
+
+    # 7) ambiguous — escalate auto under default; no pending write (§9 ambiguous)
+    store6 = RunStore(base_dir=str(OUT / "_runs_ambiguous"))
+    client6 = _client(store6, _stub(AMBIGUOUS_TRIAGE, AMBIGUOUS_STEPS))
+    amb = client6.post(
+        "/handle", json={"ticket": "ambiguous demo", "provider": "anthropic", "policy": "default"}
+    ).json()
+    _write("ambiguous_escalate.json", amb)
+
+    # 8) spam — triage=spam, no action taken (§9 spam)
+    store7 = RunStore(base_dir=str(OUT / "_runs_spam"))
+    client7 = _client(store7, _stub(SPAM_TRIAGE, SPAM_STEPS))
+    spam = client7.post(
+        "/handle", json={"ticket": "spam demo", "provider": "anthropic", "policy": "default"}
+    ).json()
+    _write("spam_noaction.json", spam)
+
+    # 9) meta — config + examples (drives the config sheet / example buttons)
     _write("config.json", client.get("/config").json())
     _write("examples.json", client.get("/examples").json())
     _write("health.json", client.get("/health").json())

@@ -55,8 +55,44 @@ uvicorn relay_api.app:app --reload      # then open http://127.0.0.1:8000/  (→
 ### Tests
 
 ```bash
-cd app && npm test           # Tier-1: mapper + client (node:test, no network/key)
+cd app && npm test           # Tier-1: mapper + client + component render (node:test, no network/key)
 npm run coverage             # same, with coverage (map.js + api.js ≥ 85%)
-python tests/e2e_live.py     # Tier-2: real end-to-end over HTTP (needs a key in .env)
+python tests/e2e_live.py        # Tier-2: real money-demo end-to-end over HTTP (needs a key in .env)
+python tests/e2e_injection.py   # Tier-2: the injection dark-beat (gate holds regardless of prompt)
 python tests/_gen_fixtures.py   # regenerate the canned RunView fixtures after a contract change
 ```
+
+## What's new (Split 09): every edge state, multi-pending, a11y
+
+Split 09 makes the live app honest and unbreakable under every §20/§9 edge — all driven by **real
+RunView/error fields**, never a simulated flag:
+
+- **Edge states** (mapper-driven): low-confidence + spam triage hints, ambiguous "0 writes" notice,
+  `all_grounded=false` (alert + per-claim list + "model may revise"), `deny`→blocked, `auto` write,
+  below-cache-floor caption, missing-key banner, `status=error` (message + partial cost). Markers the
+  RunView does not yet carry (`refusal` / `step_capped` / step `is_error`) are consumed *if present*
+  and degrade to absent otherwise — see the Split-09 carry-forwards in `tmp/split/PROGRESS.md`.
+- **Multi-pending turn-granular gate (R2):** when a turn proposes >1 state-change, the gate stacks
+  them; **Resume stays disabled until every one is decided**, then sends a single `/approve`
+  `decisions` array (a partial batch is refused client-side — every `tool_use` needs a `tool_result`).
+- **`send_reply` irreversible variant (R3):** the one red line + the exact reply body + citations.
+- **Provider replay (R4):** switch provider → Run again → the cost line tweens between the two
+  providers' **real** numbers (no fabricated factor); the cache caption is honest per provider.
+- **Injection dark-beat:** running the locked `injection` example shows "the gate is code — it held."
+
+### Accessibility & responsive — manual verification checklist (T6/T7, E5)
+
+The a11y *hooks* are CI-tested (`tests/a11y.test.js`) and the component render layer is exercised
+headless for every state (`tests/component.test.js`, E1/E7). A browser/axe pass is manual — run the
+served app (`uvicorn relay_api.app:app`) and confirm:
+
+- **Keyboard:** Tab reaches every control; on suspend, focus moves into the gate and is trapped;
+  `Enter`=Approve, `E`=edit, Reject requires focus+activate; batch mode tabs each action then Resume;
+  closing the gate returns focus to the trace. 2px indigo focus ring on every control.
+- **Screen reader:** opening the gate announces "Approval required: …" (assertive); the reply streams
+  via a polite region.
+- **Reduced motion** (`prefers-reduced-motion`): rises/streaming/count-up collapse to ≤80ms fades, the
+  reply appears complete, **and the gate still appears + still announces** — no state is motion-only.
+- **Responsive:** at 390 / 768 / 1280px the fluid single column holds and the pause behaves
+  identically (bottom sheet on phone, centered modal above); targets ≥44px. (Desktop two-pane is a
+  deliberate non-change — the prototype is mobile-first by design; see the Split-09 carry-forward.)

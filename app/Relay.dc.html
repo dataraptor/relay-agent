@@ -31,7 +31,17 @@
     @keyframes rl-scrim{ from{ opacity:0; } to{ opacity:1; } }
     @keyframes rl-row{ from{ transform:translateY(6px); opacity:0; } to{ transform:translateY(0); opacity:1; } }
     textarea,input,button{ font-family:inherit; }
-    textarea:focus,input:focus{ outline:none; }
+    /* a11y: a visible 2px indigo focus ring on every interactive element (keyboard-only, §9). */
+    a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible,
+    [tabindex]:focus-visible{ outline:2px solid #4F46E5; outline-offset:2px; border-radius:6px; }
+    button:focus:not(:focus-visible), input:focus:not(:focus-visible),
+    textarea:focus:not(:focus-visible){ outline:none; }
+    /* Reduced motion (§9): collapse rises/streaming/count-up/cross-dissolve to ≤80ms fades. The
+       gate still appears and the assertive announcement still fires — no state is motion-only. */
+    @media (prefers-reduced-motion: reduce){
+      *, *::before, *::after{ animation-duration:0.08s !important; animation-iteration-count:1 !important; transition-duration:0.08s !important; }
+      .rl-sheet{ animation-duration:0.08s !important; }
+    }
   </style>
 </helmet>
 
@@ -171,8 +181,12 @@
                 </span>
                 <span style="font-size:12.5px; color:#52525B;">confidence <span style="{{ t_confStyle }}">{{ t_confidence }}</span></span>
               </div>
-              <sc-if value="{{ t_lowConf }}" hint-placeholder-val="{{ false }}">
-                <div style="font-size:12px; color:#A1A1AA; margin:-8px 0 12px;">low → biases to route / escalate</div>
+              <sc-if value="{{ t_hasHints }}" hint-placeholder-val="{{ false }}">
+                <div style="margin:-8px 0 12px; display:flex; flex-direction:column; gap:3px;">
+                  <sc-for list="{{ t_hints }}" as="h" hint-placeholder-count="1">
+                    <div style="font-size:12px; color:#A1A1AA;">{{ h.text }}</div>
+                  </sc-for>
+                </div>
               </sc-if>
               <div style="display:flex; flex-direction:column; gap:7px; font-family:'JetBrains Mono',monospace; font-size:13px;">
                 <sc-for list="{{ t_fields }}" as="f" hint-placeholder-count="4">
@@ -210,6 +224,9 @@
                     <sc-if value="{{ row.hasResult }}" hint-placeholder-val="{{ false }}">
                       <div style="font-size:12.5px; color:{{ row.resultColor }}; margin-top:3px;">{{ row.resultLine }}</div>
                     </sc-if>
+                    <sc-if value="{{ row.hasError }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex; gap:6px; align-items:flex-start; margin-top:4px; font-size:12px; color:#0A0A0B;"><span style="color:#0A0A0B; font-weight:700;">!</span><span>{{ row.errorLine }} — the model adapts</span></div>
+                    </sc-if>
                   </div>
                 </div>
               </sc-if>
@@ -231,7 +248,7 @@
                   <span style="flex:none; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; margin-top:1px;">{{ row.glyphEl }}</span>
                   <div style="flex:1; min-width:0;">
                     <div style="font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:500; color:#0A0A0B;">draft_reply</div>
-                    <div style="background:#FAFAFA; border:1px solid #ECECEE; border-radius:9px; padding:11px 12px; margin-top:7px; font-size:14px; line-height:1.5; color:#0A0A0B; max-width:64ch;">{{ row.replyBody }}<sc-if value="{{ row.streaming }}" hint-placeholder-val="{{ false }}"><span style="display:inline-block; width:2px; height:15px; background:#0A0A0B; margin-left:1px; vertical-align:-2px; animation:rl-caret 1s steps(1) infinite;"></span></sc-if></div>
+                    <div aria-live="polite" style="background:#FAFAFA; border:1px solid #ECECEE; border-radius:9px; padding:11px 12px; margin-top:7px; font-size:14px; line-height:1.5; color:#0A0A0B; max-width:64ch;">{{ row.replyBody }}<sc-if value="{{ row.streaming }}" hint-placeholder-val="{{ false }}"><span style="display:inline-block; width:2px; height:15px; background:#0A0A0B; margin-left:1px; vertical-align:-2px; animation:rl-caret 1s steps(1) infinite;"></span></sc-if></div>
                     <sc-if value="{{ row.hasCitations }}" hint-placeholder-val="{{ false }}">
                       <div style="margin-top:8px;">
                         <div style="font-size:11.5px; color:#52525B; margin-bottom:4px;">Citations</div>
@@ -266,6 +283,9 @@
                           </sc-for>
                         </div>
                       </sc-if>
+                      <sc-if value="{{ row.mayRevise }}" hint-placeholder-val="{{ false }}">
+                        <div style="font-size:12px; color:#52525B; margin-top:5px;">model may revise — fed back, not blocked</div>
+                      </sc-if>
                     </sc-if>
                   </div>
                 </div>
@@ -276,6 +296,25 @@
           <sc-if value="{{ multiPendingNote }}" hint-placeholder-val="{{ false }}">
             <div style="font-size:12px; color:#4338CA; padding:6px 0 10px;">{{ multiPendingNote }}</div>
           </sc-if>
+        </section>
+      </sc-if>
+
+      <!-- EDGE-STATE NOTICES (refusal / step-cap / error / ambiguous — surface, never crash) -->
+      <sc-if value="{{ showNotices }}" hint-placeholder-val="{{ false }}">
+        <section style="border:1px solid #ECECEE; border-radius:12px; padding:14px; margin-bottom:14px;">
+          <div style="display:flex; flex-direction:column; gap:9px;">
+            <sc-for list="{{ notices }}" as="n" hint-placeholder-count="1">
+              <div style="display:flex; gap:9px; align-items:flex-start;">
+                <span style="flex:none; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; margin-top:1px;">{{ n.glyphEl }}</span>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-size:13px; color:#0A0A0B; line-height:1.5;">{{ n.text }}</div>
+                  <sc-if value="{{ n.hasDetail }}" hint-placeholder-val="{{ false }}">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#52525B; margin-top:3px;">{{ n.detail }}</div>
+                  </sc-if>
+                </div>
+              </div>
+            </sc-for>
+          </div>
         </section>
       </sc-if>
 
@@ -334,9 +373,12 @@
       <div onClick="{{ onScrim }}" style="position:fixed; inset:0; z-index:40; background:rgba(10,10,11,0.32); animation:rl-scrim 0.2s ease-out;"></div>
     </sc-if>
 
-    <!-- GATE SHEET -->
-    <sc-if value="{{ gateOpen }}" hint-placeholder-val="{{ false }}">
-      <div class="rl-sheet" style="background:#FFFFFF; box-shadow:0 0 0 1px #ECECEE, 0 24px 64px rgba(10,10,11,0.22); padding:8px 18px calc(20px + env(safe-area-inset-bottom));">
+    <!-- a11y: assertive announcement of the gate (visually hidden, read by screen readers) -->
+    <div aria-live="assertive" role="status" style="position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; border:0;">{{ liveMessage }}</div>
+
+    <!-- GATE SHEET — single-pending fast path -->
+    <sc-if value="{{ gateSingle }}" hint-placeholder-val="{{ false }}">
+      <div class="rl-sheet" role="dialog" aria-modal="true" aria-label="Approval required" tabIndex="-1" onKeyDown="{{ onGateKey }}" style="background:#FFFFFF; box-shadow:0 0 0 1px #ECECEE, 0 24px 64px rgba(10,10,11,0.22); padding:8px 18px calc(20px + env(safe-area-inset-bottom));">
         <div class="rl-grab" style="width:36px; height:4px; border-radius:99px; background:#E4E4E7; margin:6px auto 14px;"></div>
         <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:14px;">
           <span style="flex:none; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;">
@@ -365,20 +407,32 @@
           </sc-for>
         </div>
 
+        <!-- send_reply variant (R3): the one place red appears + the exact reply body + citations -->
         <sc-if value="{{ g_irreversible }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex; gap:7px; align-items:center; background:#FEF2F2; border:1px solid #FAD4D4; border-radius:8px; padding:9px 11px; margin-bottom:13px;">
             <span style="color:#DC2626; font-weight:700;">!</span>
             <span style="font-size:12.5px; color:#0A0A0B;">Irreversible · emails the customer</span>
           </div>
         </sc-if>
+        <sc-if value="{{ g_hasReply }}" hint-placeholder-val="{{ false }}">
+          <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:5px;">Exact reply</div>
+          <div style="background:#FAFAFA; border:1px solid #ECECEE; border-radius:9px; padding:11px 12px; margin-bottom:10px; font-size:13.5px; line-height:1.5; color:#0A0A0B;">{{ g_replyBody }}</div>
+          <sc-for list="{{ g_replyCitations }}" as="c" hint-placeholder-count="1">
+            <div style="display:flex; gap:7px; align-items:baseline; font-family:'JetBrains Mono',monospace; font-size:12px; color:#52525B; margin-bottom:8px;">
+              <sup>{{ c.marker }}</sup><span>{{ c.label }}</span>
+            </div>
+          </sc-for>
+        </sc-if>
 
         <div style="height:1px; background:#ECECEE; margin:0 0 13px;"></div>
         <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:5px;">Why</div>
         <div style="font-size:13.5px; line-height:1.5; color:#0A0A0B; margin-bottom:14px;">{{ g_rationale }}</div>
 
-        <div style="height:1px; background:#ECECEE; margin:0 0 13px;"></div>
-        <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:5px;">If approved</div>
-        <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#0A0A0B; margin-bottom:8px;">{{ g_diffText }}</div>
+        <sc-if value="{{ g_hasDiff }}" hint-placeholder-val="{{ true }}">
+          <div style="height:1px; background:#ECECEE; margin:0 0 13px;"></div>
+          <div style="font-size:11px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase; color:#52525B; margin-bottom:5px;">If approved</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:13px; color:#0A0A0B; margin-bottom:8px;">{{ g_diffText }}</div>
+        </sc-if>
 
         <sc-if value="{{ g_injection }}" hint-placeholder-val="{{ false }}">
           <div style="background:#FAFAFA; border:1px solid #E4E4E7; border-radius:9px; padding:11px 12px; margin-bottom:14px;">
@@ -390,12 +444,72 @@
         </sc-if>
 
         <div style="display:flex; flex-direction:column; gap:9px; margin-top:4px;">
-          <button onClick="{{ onApprove }}" style="height:52px; border-radius:11px; background:#0A0A0B; border:none; color:#FFFFFF; font-size:15px; font-weight:600; cursor:pointer;" style-active="background:#27272A;">{{ approveLabel }}</button>
+          <button id="rl-gate-primary" onClick="{{ onApprove }}" style="height:52px; border-radius:11px; background:#0A0A0B; border:none; color:#FFFFFF; font-size:15px; font-weight:600; cursor:pointer;" style-active="background:#27272A;">{{ approveLabel }}</button>
           <div style="display:flex; gap:9px;">
             <button onClick="{{ onToggleEdit }}" style="flex:1; height:46px; border-radius:11px; background:#FFFFFF; border:1px solid #DEDEE2; color:#0A0A0B; font-size:14px; font-weight:500; cursor:pointer;">{{ editLabel }}</button>
             <button onClick="{{ onReject }}" style="flex:1; height:46px; border-radius:11px; background:#FFFFFF; border:1px solid #DEDEE2; color:#52525B; font-size:14px; font-weight:500; cursor:pointer;">Reject</button>
           </div>
         </div>
+      </div>
+    </sc-if>
+
+    <!-- GATE SHEET — multi-pending batch (R2): decide ALL before Resume (turn-granular, §8) -->
+    <sc-if value="{{ gateBatch }}" hint-placeholder-val="{{ false }}">
+      <div class="rl-sheet" role="dialog" aria-modal="true" aria-label="Approval required for multiple actions" tabIndex="-1" onKeyDown="{{ onGateKey }}" style="background:#FFFFFF; box-shadow:0 0 0 1px #ECECEE, 0 24px 64px rgba(10,10,11,0.22); padding:8px 18px calc(20px + env(safe-area-inset-bottom));">
+        <div class="rl-grab" style="width:36px; height:4px; border-radius:99px; background:#E4E4E7; margin:6px auto 14px;"></div>
+        <div style="display:flex; gap:10px; align-items:flex-start; margin-bottom:6px;">
+          <span style="flex:none; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;">
+            <svg width="17" height="17" viewBox="0 0 18 18" fill="none"><rect x="3" y="8" width="12" height="8" rx="1.6" stroke="#0A0A0B" stroke-width="1.5"/><path d="M5.5 8V6a3.5 3.5 0 0 1 7 0v2" stroke="#0A0A0B" stroke-width="1.5"/></svg>
+          </span>
+          <div>
+            <div style="font-size:16px; font-weight:600; color:#0A0A0B;">{{ g_pendingCount }} actions awaiting approval</div>
+            <div style="font-size:12.5px; color:#52525B; margin-top:1px;">Decide every one to resume · gated by code, not the model</div>
+          </div>
+        </div>
+
+        <sc-if value="{{ g_injection }}" hint-placeholder-val="{{ false }}">
+          <div style="background:#FAFAFA; border:1px solid #E4E4E7; border-radius:9px; padding:11px 12px; margin:8px 0 4px;">
+            <span style="font-size:12.5px; line-height:1.5; color:#0A0A0B;">This ticket tried to force an un-approved action. The gate is code — it held.</span>
+          </div>
+        </sc-if>
+
+        <div style="margin-top:13px;">
+          <sc-for list="{{ g_pendings }}" as="pp" hint-placeholder-count="2">
+            <div style="{{ pp.rowStyle }}">
+              <div style="display:flex; align-items:baseline; justify-content:space-between; gap:8px; margin-bottom:7px;">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:13.5px; font-weight:500; color:#0A0A0B;">{{ pp.tool }}</span>
+                <span style="font-size:11.5px; color:#52525B;">{{ pp.stateLabel }}</span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:8px;">
+                <sc-for list="{{ pp.args }}" as="a" hint-placeholder-count="2">
+                  <div style="display:flex; gap:10px; font-family:'JetBrains Mono',monospace; font-size:12px;">
+                    <span style="flex:none; width:78px; color:#52525B;">{{ a.key }}</span>
+                    <span style="flex:1; min-width:0; color:#0A0A0B;">{{ a.value }}</span>
+                  </div>
+                </sc-for>
+              </div>
+              <sc-if value="{{ pp.irreversible }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex; gap:7px; align-items:center; background:#FEF2F2; border:1px solid #FAD4D4; border-radius:8px; padding:7px 10px; margin-bottom:8px;">
+                  <span style="color:#DC2626; font-weight:700;">!</span>
+                  <span style="font-size:12px; color:#0A0A0B;">Irreversible · emails the customer</span>
+                </div>
+              </sc-if>
+              <sc-if value="{{ pp.hasReply }}" hint-placeholder-val="{{ false }}">
+                <div style="background:#F4F4F5; border-radius:8px; padding:9px 10px; margin-bottom:8px; font-size:12.5px; line-height:1.5; color:#0A0A0B;">{{ pp.replyBody }}</div>
+              </sc-if>
+              <sc-if value="{{ pp.hasDiff }}" hint-placeholder-val="{{ false }}">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#52525B; margin-bottom:8px;">{{ pp.diffText }}</div>
+              </sc-if>
+              <div style="font-size:12.5px; color:#52525B; margin-bottom:9px;">{{ pp.rationale }}</div>
+              <div style="display:flex; gap:8px;">
+                <button onClick="{{ pp.onAllow }}" style="{{ pp.allowStyle }}">Approve</button>
+                <button onClick="{{ pp.onReject }}" style="{{ pp.rejectStyle }}">Reject</button>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+
+        <button id="rl-gate-primary" onClick="{{ onResume }}" style="{{ g_resumeStyle }}">Resume</button>
       </div>
     </sc-if>
 
@@ -449,22 +563,42 @@ class Component extends DCLogic {
       provider:'anthropic', model:'',
       policy: props.policyDefault || 'default',
       configOpen:false, demoOpen:false,
-      triageLoading:false, triage:null,
+      triageLoading:false, triage:null, triageHints:[],
       trace:[], pendingRowIndex:null, pending:null,
+      pendings:[], multiPending:false, choices:{},
       editing:false, edited:{},
       records:null, recordsState:'empty', proposedStatus:null,
-      cost:0, costBreakdown:[], tokens:null, latency:null,
-      gateOpen:false, stepLabel:'', outcome:null, decision:null,
-      citeOpenIdx:null, faithOpen:false, costOpen:false,
+      cost:0, costBreakdown:[], tokens:null, latency:null, cacheCaption:'',
+      gateOpen:false, stepLabel:'', outcome:null, decision:null, notices:[],
+      citeOpenIdx:null, faithOpen:false, costOpen:false, liveMessage:'',
     };
-    this._timers=[]; this._costTarget=0;
+    this._timers=[]; this._costTarget=0; this._reduced=false; this._wasGateOpen=false;
   }
   componentDidMount(){
     this._costTimer=setInterval(()=>this.tickCost(),70);
     this.api = window.RelayApi.makeClient();   // same-origin (served by the API)
+    // Reduced-motion: collapse streaming/animation to instant; the gate + announcement still fire.
+    try { this._reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch(e) { this._reduced=false; }
     this.loadMeta();
   }
+  componentDidUpdate(){
+    // a11y: when the gate opens, move focus into it (trapped while open); on close, return focus
+    // to the trace row that raised it. The assertive announcement is set when the gate opens.
+    if(this.state.gateOpen && !this._wasGateOpen){
+      this._lastFocus = (typeof document!=='undefined') && document.activeElement;
+      this.after(30,()=>{ const el=document.getElementById('rl-gate-primary'); if(el) el.focus(); });
+    } else if(!this.state.gateOpen && this._wasGateOpen){
+      const back=this._lastFocus; this._lastFocus=null;
+      if(back && back.focus){ this.after(0,()=>{ try{ back.focus(); }catch(e){} }); }
+    }
+    this._wasGateOpen = this.state.gateOpen;
+  }
   componentWillUnmount(){ this.clearTimers(); clearInterval(this._costTimer); }
+
+  // Whether the active example is the locked (injection) one — a real /examples signal that drives
+  // the gate's "the gate is code — it held" dark-beat caption (not a fabricated client flag).
+  isInjectionExample(){ const ex=(this.state.examples||[]).find(e=>e.id===this.state.example); return !!(ex && ex.lock); }
+  mapView(rv){ return window.RelayMap.runViewToState(rv, { injectionHint: this.isInjectionExample() }); }
 
   // ---------- timing & cost ----------
   tickCost(){ const c=this.state.cost, t=this._costTarget; if(Math.abs(c-t)>0.00004){ this.setState({cost:c+(t-c)*0.32}); } else if(c!==t){ this.setState({cost:t}); } }
@@ -509,27 +643,30 @@ class Component extends DCLogic {
     this.clearTimers();
     this._costTarget=0;
     this.setState({ phase:'running', ticketCollapsed:true, configOpen:false, demoOpen:false,
-      triage:null, triageLoading:true, trace:[], pending:null, pendingRowIndex:null, gateOpen:false,
+      triage:null, triageLoading:true, triageHints:[], trace:[], pending:null, pendings:[], multiPending:false,
+      choices:{}, notices:[], pendingRowIndex:null, gateOpen:false, liveMessage:'',
       outcome:null, decision:null, records:null, recordsState:'empty', proposedStatus:null,
-      run_id:null, cost:0, costBreakdown:[], tokens:null, latency:null, editing:false, edited:{},
+      run_id:null, cost:0, costBreakdown:[], tokens:null, latency:null, cacheCaption:'', editing:false, edited:{},
       citeOpenIdx:null, faithOpen:false, costOpen:false, stepLabel:'triage', keyBanner:'' });
     this.api.handle({ ticket, provider:this.state.provider, model:this.state.model||null, policy:this.state.policy })
       .then(rv=>this.revealRunView(rv))
       .catch(err=>this.handleApiError(err));
   }
 
-  // Reveal the real RunView with the prototype's calm cadence (no fabricated data).
+  // Reveal the real RunView with the prototype's calm cadence (no fabricated data). Under
+  // prefers-reduced-motion the reply appears complete and the cadence collapses (§9).
   revealRunView(rv){
-    const vm=window.RelayMap.runViewToState(rv);
+    const vm=this.mapView(rv);
     this._vm=vm;
-    this.setState({ run_id:vm.run_id });
-    this.after(150,()=>{ this.setState({ triageLoading:false, triage:vm.triage }); this._costTarget=vm.cost; });
-    let t=550;
+    this.setState({ run_id:vm.run_id, triageHints:vm.triageHints, notices:vm.notices, cacheCaption:vm.cacheCaption });
+    const reduced=this._reduced;
+    this.after(reduced?0:150,()=>{ this.setState({ triageLoading:false, triage:vm.triage }); this._costTarget=vm.cost; });
+    let t=reduced?0:550;
     const rows=vm.trace;
     rows.forEach((row)=>{
       this.after(t,()=>{
         this.setState({ stepLabel: row.tool });
-        if(row.kind==='reply'){
+        if(row.kind==='reply' && !reduced){
           const body=row.replyBody||'';
           this.pushRow({ ...row, replyBody:'', streaming:true });
           const words=body.split(' ');
@@ -537,29 +674,41 @@ class Component extends DCLogic {
           words.forEach((w,i)=>{ this.after(wt,()=>this.streamReply((i?' ':'')+w)); wt+=34; });
           this.after(wt+150,()=>this.updateLastRow({ streaming:false }));
         } else {
-          this.pushRow(row);
+          this.pushRow(row);   // reduced-motion: the reply row appears complete, no token streaming
         }
         if(row.kind==='read' && row.tool==='lookup_customer' && vm.records){
           this.setState({ records:vm.records, recordsState:'populated' });
         }
       });
-      t += (row.kind==='reply') ? 950 : 560;
+      t += reduced ? 0 : ((row.kind==='reply') ? 950 : 560);
     });
     this.after(t,()=>this.finishReveal(vm));
   }
 
   finishReveal(vm){
-    if(vm.status==='awaiting_approval' && vm.pending){
-      this.setState({ phase:'awaiting_approval', pending:vm.pending, pendingRowIndex:vm.pendingRowIndex,
+    if(vm.status==='awaiting_approval' && vm.pendings.length){
+      this.setState({ phase:'awaiting_approval', pending:vm.pending, pendings:vm.pendings,
+        multiPending:vm.multiPending, choices:{}, pendingRowIndex:vm.pendingRowIndex,
         records:vm.records||this.state.records, recordsState:vm.recordsState, proposedStatus:vm.proposedStatus,
-        stepLabel:'awaiting approval' });
-      this.after(380,()=>this.setState({ gateOpen:true }));
+        notices:vm.notices, stepLabel:'awaiting approval' });
+      this.after(this._reduced?40:380,()=>this.openGate(vm));
     } else {
       this.setState({ phase:'done', stepLabel:'', records:vm.records||this.state.records,
         recordsState:vm.recordsState, outcome:vm.outcome, tokens:vm.tokens, latency:vm.latency,
-        costBreakdown:vm.costBreakdown });
+        costBreakdown:vm.costBreakdown, cacheCaption:vm.cacheCaption, notices:vm.notices });
       this._costTarget=vm.cost;
     }
+  }
+
+  // Open the gate + fire the assertive screen-reader announcement (§9). The first pending tool
+  // names the action; a batch turn says how many must be decided.
+  openGate(vm){
+    const n=vm.pendings.length;
+    const tool=vm.pending?vm.pending.tool:'an action';
+    const msg = n>1
+      ? ('Approval required: '+n+' actions — decide all '+n+' to resume')
+      : ('Approval required: '+tool+' — review proposed arguments');
+    this.setState({ gateOpen:true, liveMessage:msg });
   }
 
   // ---------- gate actions ----------
@@ -569,39 +718,71 @@ class Component extends DCLogic {
     return out;
   }
   // ---------- decision: approve / reject over HTTP ----------
+  // Single-pending fast path: one decision over the lone pending action.
   sendDecision(verb){
     const p=this.state.pending; if(!p || !this.api) return;
     const hasEdits=Object.keys(this.state.edited).length>0;
     const decision={ approval_id:p.id, decision: verb==='allow'?'allow':'reject' };
     if(verb==='allow' && hasEdits) decision.edited_args=this.finalArgsObj();
-    this.clearTimers();
-    this.setState({ gateOpen:false, phase:'running', stepLabel: verb==='allow'?'committing':'recording' });
-    this.api.approve({ run_id:this.state.run_id, decisions:[decision] })
-      .then(rv=>this.applyDecision(rv, verb))
-      .catch(err=>this.handleApiError(err));
+    this.postDecisions([decision], verb);
   }
   approve(){ this.sendDecision('allow'); }
   reject(){ this.sendDecision('reject'); }
+
+  // ---------- multi-pending turn-granular batch (R2, §8) ----------
+  setChoice(id, verb){ this.setState(s=>({ choices:{...s.choices, [id]:verb} })); }
+  choiceObj(){ const o={}; Object.keys(this.state.choices).forEach(id=>{ o[id]={verb:this.state.choices[id]}; }); return o; }
+  canResume(){ return window.RelayMap.allDecided(this.state.pendings, this.choiceObj()); }
+  resumeBatch(){
+    // The client refuses to send a partial batch — every pending action must be decided first, so
+    // every tool_use block gets a matching tool_result before the loop resumes (§8).
+    const decisions=window.RelayMap.buildDecisions(this.state.pendings, this.choiceObj());
+    if(!decisions) return;
+    const anyAllow=decisions.some(d=>d.decision==='allow');
+    this.postDecisions(decisions, anyAllow?'allow':'reject');
+  }
+
+  postDecisions(decisions, verb){
+    if(!this.api) return;
+    this.clearTimers();
+    this.setState({ gateOpen:false, liveMessage:'', phase:'running', stepLabel: verb==='allow'?'committing':'recording' });
+    this.api.approve({ run_id:this.state.run_id, decisions })
+      .then(rv=>this.applyDecision(rv, verb))
+      .catch(err=>this.handleApiError(err));
+  }
+
   applyDecision(rv, verb){
-    const vm=window.RelayMap.runViewToState(rv);
+    const vm=this.mapView(rv);
     this._costTarget=vm.cost;
     this.setState({ phase: vm.status==='awaiting_approval'?'awaiting_approval':'done', gateOpen:false, editing:false,
-      trace:vm.trace, pending:vm.pending, pendingRowIndex:vm.pendingRowIndex,
+      trace:vm.trace, pending:vm.pending, pendings:vm.pendings, multiPending:vm.multiPending, choices:{},
+      pendingRowIndex:vm.pendingRowIndex,
       records:vm.records, recordsState:vm.recordsState, proposedStatus:vm.proposedStatus,
-      decision: verb==='allow'?'approved':'rejected',
+      decision: verb==='allow'?'approved':'rejected', notices:vm.notices, cacheCaption:vm.cacheCaption,
       outcome:vm.outcome, tokens:vm.tokens, latency:vm.latency, costBreakdown:vm.costBreakdown, stepLabel:'' });
-    if(vm.status==='awaiting_approval' && vm.pending){ this.after(380,()=>this.setState({gateOpen:true})); }
+    if(vm.status==='awaiting_approval' && vm.pendings.length){ this.after(this._reduced?40:380,()=>this.openGate(vm)); }
   }
   handleApiError(err){
     this.clearTimers();
     const banner=(err && err.bannerText) || (err && err.message) || 'Something went wrong talking to the API.';
-    this.setState({ phase:'idle', triageLoading:false, gateOpen:false, stepLabel:'', keyBanner:banner });
+    this.setState({ phase:'idle', triageLoading:false, gateOpen:false, liveMessage:'', stepLabel:'', keyBanner:banner });
   }
-    toggleEdit(){ this.setState(s=>({editing:!s.editing})); }
+  toggleEdit(){ this.setState(s=>({editing:!s.editing})); }
   updateArg(key,val){ this.setState(s=>({edited:{...s.edited,[key]:val}})); }
 
+  // a11y: keyboard-first gate (§9). Enter = Approve (single), E = toggle edit, Escape = scrim/close.
+  // (Reject is focus-then-confirm — the operator must tab to it; no destructive default.)
+  onGateKey(e){
+    if(!this.state.gateOpen) return;
+    const k=e.key;
+    if(k==='Escape'){ this.onScrim(); return; }
+    if(this.state.multiPending) return;               // batch: each row is operated explicitly
+    if(k==='Enter'){ e.preventDefault && e.preventDefault(); this.approve(); }
+    else if(k==='e' || k==='E'){ e.preventDefault && e.preventDefault(); this.toggleEdit(); }
+  }
+
   // ---------- ui actions ----------
-  pickExample(id){ this.clearTimers(); this._costTarget=0; const ex=(this.state.examples||[]).find(e=>e.id===id); this.setState({ example:id, ticketText: ex?ex.ticket:this.state.ticketText, phase:'idle', ticketCollapsed:false, triage:null, triageLoading:false, trace:[], records:null, recordsState:'empty', outcome:null, pending:null, gateOpen:false, cost:0, costBreakdown:[], decision:null, proposedStatus:null, run_id:null }); }
+  pickExample(id){ this.clearTimers(); this._costTarget=0; const ex=(this.state.examples||[]).find(e=>e.id===id); this.setState({ example:id, ticketText: ex?ex.ticket:this.state.ticketText, phase:'idle', ticketCollapsed:false, triage:null, triageLoading:false, triageHints:[], trace:[], records:null, recordsState:'empty', outcome:null, pending:null, pendings:[], multiPending:false, choices:{}, notices:[], gateOpen:false, liveMessage:'', cost:0, costBreakdown:[], decision:null, proposedStatus:null, run_id:null }); }
   onTicketInput(e){ this.setState({ticketText:e.target.value}); }
   reExpand(){ this.setState({ticketCollapsed:false}); }
   openConfig(){ this.setState({configOpen:true, demoOpen:false}); }
@@ -622,6 +803,7 @@ class Component extends DCLogic {
     if(kind==='arrow') return c('span',{style:{color:'#0A0A0B',fontWeight:700,fontSize:13,lineHeight:1}},'\u25BA');
     if(kind==='cross') return c('svg',{width:13,height:13,viewBox:'0 0 14 14',fill:'none'},c('path',{d:'M3.5 3.5L10.5 10.5M10.5 3.5L3.5 10.5',stroke:'#A1A1AA',strokeWidth:1.5,strokeLinecap:'round'}));
     if(kind==='auto') return c('span',{style:{display:'inline-block',width:12,height:12,border:'1.6px solid #A1A1AA',borderRadius:'50%'}});
+    if(kind==='alert') return c('svg',{width:14,height:14,viewBox:'0 0 14 14',fill:'none'},c('path',{d:'M7 1.6L13 12H1L7 1.6Z',stroke:'#0A0A0B',strokeWidth:1.3,strokeLinejoin:'round'}),c('path',{d:'M7 5.6V8.2',stroke:'#0A0A0B',strokeWidth:1.3,strokeLinecap:'round'}),c('circle',{cx:7,cy:10.1,r:0.8,fill:'#0A0A0B'}));
     if(kind==='lock') return c('svg',{width:13,height:13,viewBox:'0 0 18 18',fill:'none'},c('rect',{x:3,y:8,width:12,height:8,rx:1.6,stroke:'#4F46E5',strokeWidth:1.6}),c('path',{d:'M5.5 8V6a3.5 3.5 0 0 1 7 0v2',stroke:'#4F46E5',strokeWidth:1.6}));
     return null;
   }
@@ -633,8 +815,8 @@ class Component extends DCLogic {
   renderVals(){
     const st=this.state;
     const seg=(active)=> active
-      ? 'height:40px; padding:0 16px; border-radius:9px; background:#0A0A0B; border:1px solid #0A0A0B; color:#FFFFFF; font-size:13px; font-weight:500; cursor:pointer;'
-      : 'height:40px; padding:0 16px; border-radius:9px; background:#FFFFFF; border:1px solid #DEDEE2; color:#52525B; font-size:13px; font-weight:500; cursor:pointer;';
+      ? 'height:44px; padding:0 16px; border-radius:9px; background:#0A0A0B; border:1px solid #0A0A0B; color:#FFFFFF; font-size:13px; font-weight:500; cursor:pointer;'
+      : 'height:44px; padding:0 16px; border-radius:9px; background:#FFFFFF; border:1px solid #DEDEE2; color:#52525B; font-size:13px; font-weight:500; cursor:pointer;';
     const exBtn=(active)=> active
       ? 'display:inline-flex; align-items:center; padding:4px 9px; border-radius:7px; background:#0A0A0B; border:1px solid #0A0A0B; color:#FFFFFF; font-size:11.5px; cursor:pointer;'
       : 'display:inline-flex; align-items:center; padding:4px 9px; border-radius:7px; background:transparent; border:1px solid transparent; color:#52525B; font-size:11.5px; cursor:pointer;';
@@ -681,28 +863,56 @@ class Component extends DCLogic {
         tool:row.tool, toolColor,
         hasArgs:!!row.argsLine, argsLine:row.argsLine,
         hasResult:!!row.result, resultLine:row.result, resultColor,
+        hasError:!!row.isError, errorLine:row.errorLine||'',
         hasLatency:!!row.latency, latency:row.latency,
         replyBody:row.replyBody||'', streaming:!!row.streaming,
         hasCitations:(row.citations||[]).length>0, citeList,
         hasFaith:!!row.faithLabel, faithLabel:row.faithLabel,
-        faithGlyphEl: this.glyph(row.grounded?'check':'cross'),
+        faithGlyphEl: this.glyph(row.grounded?'check':'alert'),
         faithColor: row.grounded?'#52525B':'#0A0A0B', faithWeight: row.grounded?'400':'500',
         faithChevron: st.faithOpen?'\u2715':'\u203A',
         faithOnClick:()=>this.setState(s=>({faithOpen:!s.faithOpen})),
         claimsOpen:st.faithOpen, claimList,
+        mayRevise:!!row.mayRevise,
       };
     });
 
-    // gate
+    // gate (single-pending fast path)
     const p=st.pending;
     const g_args=(p?p.args:[]).map(a=>{
       const editing = st.editing && a.editable;
       const val = (st.edited[a.key]!==undefined)?st.edited[a.key]:a.value;
       return { key:a.key, value:val, editing, readonly:!editing, onInput:(e)=>this.updateArg(a.key,e.target.value) };
     });
-    const diffStatus = proposed||'';
-    const g_diffText = p ? ('ticket #'+(p.args[0]?p.args[0].value:'')+'  open \u2192 '+diffStatus) : '';
+    const diffOf=(pp)=> (pp && pp.diff) ? ('ticket #'+(pp.diff.ticketId||'')+'  '+(pp.diff.current||'?')+' \u2192 '+(pp.diff.proposed||'?')) : '';
+    const g_diffText = diffOf(p);
+    const g_reply = p && p.reply;
+    const g_replyCitations = (g_reply ? g_reply.citations||[] : []).map((c,ci)=>({ marker:['\u00b9','\u00b2','\u00b3','\u2074'][ci]||'\u2022', label:c.label, text:c.text }));
     const hasEdits = Object.keys(st.edited).length>0;
+
+    // gate (multi-pending batch): one row per pending action; Resume gates on all-decided (\u00a78).
+    const chBtn=(active,kind)=> active
+      ? (kind==='reject'
+          ? 'flex:1; height:44px; border-radius:9px; background:#52525B; border:1px solid #52525B; color:#FFFFFF; font-size:13px; font-weight:500; cursor:pointer;'
+          : 'flex:1; height:44px; border-radius:9px; background:#0A0A0B; border:1px solid #0A0A0B; color:#FFFFFF; font-size:13px; font-weight:600; cursor:pointer;')
+      : 'flex:1; height:44px; border-radius:9px; background:#FFFFFF; border:1px solid #DEDEE2; color:#52525B; font-size:13px; font-weight:500; cursor:pointer;';
+    const g_pendings = (st.pendings||[]).map((pp)=>{
+      const ch=st.choices[pp.id];
+      return {
+        id:pp.id, tool:pp.tool, rationale:pp.rationale,
+        args:(pp.args||[]).map(a=>({key:a.key, value:a.value})),
+        hasDiff:!!(pp.diff), diffText:diffOf(pp),
+        irreversible:!!pp.irreversible,
+        hasReply:!!(pp.reply && pp.reply.body), replyBody:pp.reply?pp.reply.body:'',
+        decided: ch==='allow'||ch==='reject',
+        stateLabel: ch==='allow'?'\u2713 will approve':(ch==='reject'?'\u2715 will reject':'undecided'),
+        allowStyle:chBtn(ch==='allow','allow'), rejectStyle:chBtn(ch==='reject','reject'),
+        onAllow:()=>this.setChoice(pp.id,'allow'), onReject:()=>this.setChoice(pp.id,'reject'),
+        rowStyle: 'border:1px solid '+(ch?'#E4E4E7':'#DEDEE2')+'; border-radius:11px; padding:13px; margin-bottom:11px; background:'+(ch?'#FAFAFA':'#FFFFFF')+';',
+      };
+    });
+    const g_canResume = this.canResume();
+    const g_injection = (st.pendings||[]).some(pp=>pp.injection);
 
     // provider/model/policy options
     const cfg = st.config || {};
@@ -711,14 +921,20 @@ class Component extends DCLogic {
     const modelOptions = models.map(m=>({ label:m, style:seg(st.model===m), onClick:()=>this.setModel(m) }));
     const policyOptions = window.RelayMap.policiesFrom(cfg).map(po=>({ label:po, style:seg(st.policy===po), onClick:()=>this.setPolicy(po) }));
 
-    // cost breakdown display
+    // cost breakdown display \u2014 the cache caption is the mapper's honest per-provider line (\u00A75.7).
     const costBreakdown = st.costBreakdown.map(cb=>({ kind:cb.kind, cost:this.money(cb.cost) }));
-    const cacheRead = st.tokens ? (st.tokens.cache_read||0) : 0;
-    const cacheLine = st.provider==='openai' ? 'no prompt cache on the OpenAI path (expected)' : (cacheRead>0 ? ('cache_read '+this.fmt(cacheRead)+' tokens reused') : 'no cache hit on this run');
+    const cacheLine = st.cacheCaption || window.RelayMap.cacheCaption(st.provider, st.tokens||{});
 
     const tokensText = st.tokens ? ('in '+this.fmt(st.tokens.in)+' \u00B7 out '+this.fmt(st.tokens.out)+(st.tokens.cache_read? ' \u00B7 cache_read '+this.fmt(st.tokens.cache_read):'')) : '';
 
     const intentLabel = tr? tr.intent : 'pending';
+
+    // edge-state notices + triage hints (every one read from a real RunView field, \u00A720/\u00A79)
+    const noticeList = (st.notices||[]).map(n=>({ text:n.text, hasDetail:!!n.detail, detail:n.detail||'', glyphEl:this.glyph('alert') }));
+    const triageHintList = (st.triageHints||[]).map(h=>({ text:h }));
+    const mpNote = (st.multiPending && st.phase==='awaiting_approval')
+      ? (st.pendings.length+' actions awaiting approval \u2014 decide all '+st.pendings.length+' to resume')
+      : '';
 
     return {
       provider:st.provider, model:st.model, policy:st.policy,
@@ -754,13 +970,17 @@ class Component extends DCLogic {
       t_intent: intentLabel,
       t_priority: prio, t_priorityStyle: prioStyleMap[prio]||'', t_dotStyle: dotMap[prio]||dotMap.normal,
       t_confidence: tr?tr.confidence:'', t_confStyle:'color:#0A0A0B; font-weight:500;',
-      t_lowConf: tr && tr.confidence==='low',
+      t_hasHints: triageHintList.length>0, t_hints: triageHintList,
       t_fields,
 
       // trace
       showTrace: st.trace.length>0,
       trace,
-      multiPendingNote: '',
+      multiPendingNote: mpNote,
+
+      // edge-state notices (refusal / step-cap / error / ambiguous — surfaced, never crashed)
+      showNotices: noticeList.length>0,
+      notices: noticeList,
 
       // outcome
       showOutcome: !!st.outcome,
@@ -782,13 +1002,29 @@ class Component extends DCLogic {
       onRun:()=>{ if(st.ticketText.trim().length>0) this.run(); },
       stepLabel: st.stepLabel,
 
-      // gate
+      // gate — a11y announcement + key handler shared by both variants
       gateOpen: st.gateOpen,
+      gateSingle: st.gateOpen && !st.multiPending,
+      gateBatch: st.gateOpen && st.multiPending,
+      liveMessage: st.liveMessage,
+      onGateKey:(e)=>this.onGateKey(e),
+      g_injection,
+
+      // gate (single-pending fast path)
       g_tool: p?p.tool:'', g_args, g_rationale: p?p.rationale:'',
-      g_diffText, g_irreversible: !!(p&&p.irreversible), g_injection: !!(p&&p.injection),
+      g_hasDiff: !!g_diffText, g_diffText, g_irreversible: !!(p&&p.irreversible),
+      g_hasReply: !!(g_reply && g_reply.body), g_replyBody: g_reply?g_reply.body:'', g_replyCitations,
       approveLabel: (st.editing && hasEdits)?'Approve with edits':'Approve',
       editLabel: st.editing?'Done editing':'Edit args',
       onApprove:()=>this.approve(), onReject:()=>this.reject(), onToggleEdit:()=>this.toggleEdit(),
+
+      // gate (multi-pending batch)
+      g_pendingCount: st.pendings.length,
+      g_pendings, g_canResume,
+      g_resumeStyle: g_canResume
+        ? 'width:100%; height:52px; margin-top:4px; border-radius:11px; background:#0A0A0B; border:none; color:#FFFFFF; font-size:15px; font-weight:600; cursor:pointer;'
+        : 'width:100%; height:52px; margin-top:4px; border-radius:11px; background:#E4E4E7; border:none; color:#A1A1AA; font-size:15px; font-weight:600; cursor:not-allowed;',
+      onResume:()=>{ if(this.canResume()) this.resumeBatch(); },
 
       // sheets / overlays
       anySheet: st.gateOpen || st.configOpen,

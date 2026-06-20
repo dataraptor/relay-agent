@@ -1,0 +1,182 @@
+{
+  "id": "run_70456eb468224201",
+  "run_id": "run_70456eb468224201",
+  "ticket_id": null,
+  "triage": {
+    "intent": "billing_dispute",
+    "priority": "high",
+    "extracted_fields": {
+      "customer_email": "jane@acme.com",
+      "order_ref": "A-4471",
+      "amount": null,
+      "product": "Pro"
+    },
+    "confidence": "medium"
+  },
+  "status": "awaiting_approval",
+  "trace": [
+    {
+      "seq": 0,
+      "tool": "lookup_customer",
+      "cls": "read",
+      "args": {
+        "email": "jane@acme.com"
+      },
+      "result_summary": "Pro · active · flags: double_charge_detected",
+      "latency_ms": 0,
+      "decision": null,
+      "state": "executed",
+      "rationale": "",
+      "draft": null
+    },
+    {
+      "seq": 1,
+      "tool": "search_kb",
+      "cls": "read",
+      "args": {
+        "query": "duplicate charge refund policy"
+      },
+      "result_summary": "4 chunks",
+      "latency_ms": 1,
+      "decision": null,
+      "state": "executed",
+      "rationale": "",
+      "draft": null
+    },
+    {
+      "seq": 2,
+      "tool": "draft_reply",
+      "cls": "read_class",
+      "args": {
+        "body": "Hi Jane — we've confirmed the duplicate charge on order A-4471 and will refund it in full within 5-7 business days.",
+        "citations": [
+          "kb-refund-001"
+        ]
+      },
+      "result_summary": "draft composed",
+      "latency_ms": 0,
+      "decision": null,
+      "state": "executed",
+      "rationale": "",
+      "draft": {
+        "body": "Hi Jane — we've confirmed the duplicate charge on order A-4471 and will refund it in full within 5-7 business days.",
+        "citations": [
+          {
+            "chunk_id": "kb-refund-001",
+            "text": "Duplicate charges are refunded in full within 5-7 business days once verified.",
+            "source": "Billing Policy",
+            "url": "https://docs.relaycloud.example/billing/refunds#duplicate"
+          }
+        ],
+        "faithfulness": {
+          "all_grounded": true,
+          "claims": []
+        }
+      }
+    },
+    {
+      "seq": 3,
+      "tool": "send_reply",
+      "cls": "state_change",
+      "args": {
+        "to": "jane@acme.com",
+        "body": "Hi Jane — we've confirmed the duplicate charge on order A-4471 and will refund it in full within 5-7 business days.",
+        "citations": [
+          "kb-refund-001"
+        ]
+      },
+      "result_summary": "awaiting approval",
+      "latency_ms": null,
+      "decision": null,
+      "state": "awaiting",
+      "rationale": "Sending the cited reply to the customer.",
+      "draft": null
+    }
+  ],
+  "actions_pending": [
+    {
+      "id": "tc_send_reply",
+      "tool": "send_reply",
+      "args": {
+        "to": "jane@acme.com",
+        "body": "Hi Jane — we've confirmed the duplicate charge on order A-4471 and will refund it in full within 5-7 business days.",
+        "citations": [
+          "kb-refund-001"
+        ]
+      },
+      "rationale": "Sending the cited reply to the customer."
+    }
+  ],
+  "actions_taken": [],
+  "draft_reply": {
+    "body": "Hi Jane — we've confirmed the duplicate charge on order A-4471 and will refund it in full within 5-7 business days.",
+    "citations": [
+      {
+        "chunk_id": "kb-refund-001",
+        "source": "Billing Policy",
+        "url": "https://docs.relaycloud.example/billing/refunds#duplicate"
+      }
+    ],
+    "faithfulness": {
+      "all_grounded": true,
+      "claims": []
+    }
+  },
+  "records": {
+    "customer": {
+      "email": "jane@acme.com",
+      "plan": "Pro",
+      "status": "active",
+      "mrr": 20.0,
+      "flags": {
+        "double_charge_detected": true
+      }
+    },
+    "ticket": {
+      "id": "T-1042",
+      "status": "open",
+      "queue": "unassigned"
+    },
+    "proposed": null
+  },
+  "cost": {
+    "total_usd": 0.0038400000000000005,
+    "by_call": [
+      {
+        "kind": "triage",
+        "cost_usd": 0.00048
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      },
+      {
+        "kind": "faithfulness",
+        "cost_usd": 0.00048
+      },
+      {
+        "kind": "loop_step",
+        "cost_usd": 0.00072
+      }
+    ],
+    "tokens": {
+      "input": 640,
+      "output": 128,
+      "cache_read": 0,
+      "cache_creation": 0
+    },
+    "latency_s": 0.228891
+  },
+  "provider": "anthropic",
+  "model": "claude-sonnet-4-6",
+  "prompt_version": "relay-prompts-v1",
+  "n_runs": 1
+}

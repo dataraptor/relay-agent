@@ -49,3 +49,21 @@ test("the render layer is preserved (UI not rebuilt)", () => {
   assert.ok(HTML.includes("window.RelayMap.modelsFor(cfg"), "models come from /config");
   assert.ok(HTML.includes("keyBanner: st.keyBanner"), "the missing-key banner is wired");
 });
+
+// --- Split 09 (E6): no simulated edge signals; every state from a real field ---
+
+test("the injection caption is driven by the real /examples lock flag, not a baked flag", () => {
+  // The mapper no longer hardcodes injection:false; the component derives it from the locked example.
+  assert.ok(HTML.includes("isInjectionExample"), "injection derived from the example's lock flag");
+  assert.ok(HTML.includes("injectionHint"), "the hint is passed into the mapper");
+  assert.ok(!/injection\s*:\s*true/.test(HTML), "no hardcoded injection:true flag");
+});
+
+test("edge states + multi-pending are read from the mapped RunView, not invented", () => {
+  // notices / triage hints / pendings all flow from the mapper's view-model.
+  assert.ok(HTML.includes("notices:vm.notices") || HTML.includes("notices: noticeList"));
+  assert.ok(HTML.includes("vm.pendings"), "all pending actions come from the RunView");
+  assert.ok(HTML.includes("vm.triageHints"), "triage hints come from the RunView triage");
+  // the old single-pending-only assumption is gone
+  assert.ok(!HTML.includes("buildScenario"), "no simulation");
+});
