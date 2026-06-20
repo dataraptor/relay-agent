@@ -2,7 +2,7 @@
 
 The user-facing client: a **high-fidelity React prototype wired to the live Relay API.** It renders what the backend returns and handles approval interaction; it holds no business logic of its own. The real artifact is `Relay.dc.html`, an `<x-dc>` template plus an inline `Component extends DCLogic` class, driven by `support.js` (the "dc-runtime": it loads React, ReactDOM, and Babel from unpkg, transpiles the inline component, and mounts it). The data source is the real API (`api.js` and `map.js`), not a simulation.
 
-> The framework is **not Flutter**; there is no `lib/`. An earlier scaffolding template described one; this repo's frontend is the DC prototype documented here. For the project story, the architecture, and the leaderboard, start at the [root README](../README.md).
+For the project story, the architecture, and the leaderboard, start at the [root README](../README.md).
 
 **Depends on:** `api` (over the network, at runtime).
 
